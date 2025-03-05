@@ -5,6 +5,8 @@ import { model_loader } from "./utils/model_loader";
 import { inference_pipeline } from "./utils/inference_pipeline";
 import { draw_bounding_boxes } from "./utils/draw_bounding_boxes";
 
+// TODO: add support phone screen
+
 const DEFAULT_CONFIG = {
   input_shape: [1, 3, 640, 640],
   iou_threshold: 0.35,
@@ -27,25 +29,35 @@ function SettingsPanel({
   return (
     <div
       id="setting-container"
-      className="container text-lg flex justify-evenly gap-10"
+      className="container text-lg flex flex-col md:flex-row md:justify-evenly gap-2 md:gap-6"
     >
-      <div id="device-selector-container">
+      <div
+        id="device-selector-container"
+        className="flex items-center justify-between md:justify-start"
+      >
         <label htmlFor="device-selector">Backend:</label>
         <select
           name="device-selector"
           ref={deviceRef}
           onChange={onModelChange}
           disabled={!isModelLoaded}
+          className="ml-2"
         >
           <option value="webgpu">webGPU</option>
           <option value="wasm">Wasm(cpu)</option>
         </select>
       </div>
-      <div id="model-selector-container">
+      <div
+        id="model-selector-container"
+        className="flex items-center justify-between md:justify-start"
+      >
         <label htmlFor="model-selector">Model:</label>
-        <select name="model-selector" ref={modelRef} onChange={onModelChange}>
-          {/* ADD MODEL HERE */}
-          {/* <option value="YOUR_FILE_NAME">CUSTOM_MODEL</option> */}
+        <select
+          name="model-selector"
+          ref={modelRef}
+          onChange={onModelChange}
+          className="ml-2"
+        >
           <option value="yolo11n">yolo11n-2.6M</option>
           <option value="yolo11s">yolo11s-9.4M</option>
           {customModels.map((model, index) => (
@@ -55,17 +67,24 @@ function SettingsPanel({
           ))}
         </select>
       </div>
-      <div>
+      <div className="flex items-center justify-between md:justify-start">
         <label htmlFor="task-selector">Task:</label>
-        <select name="task-selector" ref={taskRef} onChange={onModelChange}>
+        <select
+          name="task-selector"
+          ref={taskRef}
+          onChange={onModelChange}
+          className="ml-2"
+        >
           <option value="detect">Object detection</option>
           <option value="pose">Pose estimation</option>
-          {/* <option value="segment">Segmentation</option> */}
         </select>
       </div>
-      <div id="camera-selector-container">
+      <div
+        id="camera-selector-container"
+        className="flex items-center justify-between md:justify-start"
+      >
         <label htmlFor="camera-selector">Camera:</label>
-        <select ref={cameraSelectorRef}>
+        <select ref={cameraSelectorRef} className="ml-2">
           {cameras.map((camera, index) => (
             <option key={index} value={camera.deviceId}>
               {camera.label || `Camera ${index + 1}`}
@@ -90,10 +109,10 @@ function ImageDisplay({
   isProcessing,
 }) {
   return (
-    <div className="container bg-stone-700 shadow-lg relative min-w-[640px] min-h-[320px] flex justify-center items-center">
+    <div className="container bg-stone-700 shadow-lg relative min-h-[320px] flex justify-center items-center">
       <canvas ref={inputCanvasRef} hidden></canvas>
       <video
-        className="block max-w-[720px] max-h-[640px] rounded-lg"
+        className="block w-full max-w-full md:max-w-[720px] max-h-[640px] rounded-lg inset-0 mx-auto"
         ref={cameraRef}
         onLoadedData={onCameraLoad}
         hidden={!camera_stream}
@@ -104,7 +123,8 @@ function ImageDisplay({
         ref={imgRef}
         src={imgSrc}
         onLoad={onImageLoad}
-        className="block inset-0 max-w-[720px] max-h-[640px] rounded-lg"
+        hidden={camera_stream}
+        className="block inset-0 w-full max-w-full md:max-w-[720px] max-h-[640px] rounded-lg"
       />
       <canvas ref={overlayRef} className="absolute"></canvas>
       {isProcessing && (
@@ -128,7 +148,7 @@ function ControlButtons({
   onAddModel,
 }) {
   return (
-    <div id="btn-container" className="container flex justify-around">
+    <div id="btn-container" className="container flex justify-around gap-x-4">
       <input
         type="file"
         accept="image/*"
@@ -173,12 +193,12 @@ function ControlButtons({
 // model status Components
 function ModelStatus({ warnUpTime, inferenceTime, statusMsg, statusColor }) {
   return (
-    <div id="model-status-container" className="text-2xl">
+    <div id="model-status-container" className="text-xl md:text-2xl px-2">
       <div
         id="inferenct-time-container"
-        className="flex justify-evenly text-xl my-6"
+        className="flex flex-col md:flex-row md:justify-evenly text-lg md:text-xl my-4 md:my-6"
       >
-        <p>
+        <p className="mb-2 md:mb-0">
           Warm up time: <span className="text-lime-500">{warnUpTime}ms</span>
         </p>
         <p>
@@ -196,10 +216,9 @@ function ModelStatus({ warnUpTime, inferenceTime, statusMsg, statusColor }) {
   );
 }
 
-// result table Components
 function ResultsTable({ details }) {
   return (
-    <details className="text-gray-200 group" open>
+    <details className="text-gray-200 group px-2">
       <summary className="my-5 hover:text-gray-400 cursor-pointer transition-colors duration-300">
         Detected objects
       </summary>
@@ -208,18 +227,18 @@ function ResultsTable({ details }) {
                 group-open:animate-details-show"
       >
         <table
-          className="text-left w-1/2 mx-auto border-collapse table-auto text-sm 
+          className="text-left responsive-table mx-auto border-collapse table-auto text-sm 
               bg-gray-800 rounded-md overflow-hidden"
         >
           <thead className="bg-gray-700">
             <tr>
-              <th className="border-b border-gray-600 p-4 text-gray-100">
+              <th className="border-b border-gray-600 p-2 md:p-4 text-gray-100">
                 Number
               </th>
-              <th className="border-b border-gray-600 p-4 text-gray-100">
+              <th className="border-b border-gray-600 p-2 md:p-4 text-gray-100">
                 ClassName
               </th>
-              <th className="border-b border-gray-600 p-4 text-gray-100">
+              <th className="border-b border-gray-600 p-2 md:p-4 text-gray-100">
                 Confidence
               </th>
             </tr>
@@ -230,11 +249,13 @@ function ResultsTable({ details }) {
                 key={index}
                 className="hover:bg-gray-700 transition-colors text-gray-300"
               >
-                <td className="border-b border-gray-600 p-4">{index + 1}</td>
-                <td className="border-b border-gray-600 p-4">
+                <td className="border-b border-gray-600 p-2 md:p-4">
+                  {index + 1}
+                </td>
+                <td className="border-b border-gray-600 p-2 md:p-4">
                   {classes.class[item.class_idx]}
                 </td>
-                <td className="border-b border-gray-600 p-4">
+                <td className="border-b border-gray-600 p-2 md:p-4">
                   {(item.score * 100).toFixed(1)}%
                 </td>
               </tr>
@@ -490,13 +511,18 @@ function App() {
       !overlayRef.current
     )
       return;
-
     const ctx = canvasContextRef.current;
+
+    // set input canvas
     ctx.canvas.width = cameraRef.current.videoWidth;
     ctx.canvas.height = cameraRef.current.videoHeight;
 
-    overlayRef.current.width = cameraRef.current.videoWidth;
-    overlayRef.current.height = cameraRef.current.videoHeight;
+    // set screen overlay
+    const videoRect = cameraRef.current.getBoundingClientRect();
+    overlayRef.current.width = videoRect.width;
+    overlayRef.current.height = videoRect.height;
+
+    console.log(cameraRef.current.videoWidth, cameraRef.current.videoHeight);
 
     handle_frame_continuous(ctx);
   }, [sessionRef.current]);
@@ -553,7 +579,9 @@ function App() {
 
   return (
     <>
-      <h1 className="my-8 text-4xl">Yolo multi task onnx web</h1>
+      <h1 className="my-4 md:my-8 text-3xl md:text-4xl px-2">
+        Yolo multi task onnx web
+      </h1>
 
       <SettingsPanel
         deviceRef={deviceRef}

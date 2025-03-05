@@ -17,13 +17,31 @@ select {
   @apply mr-2;
 }
 
+.responsive-container {
+  @apply mx-auto w-full max-w-full overflow-x-hidden;
+}
+
+.responsive-table {
+  @apply w-full md:w-3/4 lg:w-1/2;
+}
+
+@media (max-width: 640px) {
+  #setting-container {
+    @apply flex-col items-start gap-4;
+  }
+
+  #setting-container > div {
+    @apply w-full flex justify-between items-center;
+  }
+}
+
 @theme {
   --animate-text-loading: textLoading 1.5s ease-in-out infinite;
   --animate-details-show: details-show 300ms ease-in-out;
 
-  
   @keyframes textLoading {
-    0%, 100% {
+    0%,
+    100% {
       transform: scale(1);
       opacity: 0.5;
     }
