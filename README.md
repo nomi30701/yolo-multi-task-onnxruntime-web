@@ -47,16 +47,16 @@ yarn build
 ## 🔧 Using Custom YOLO Models
 ### Step 1: Convert model to ONNX format
 Read more on [Ultralytics](https://docs.ultralytics.com/).
-    ```Python
-    from ultralytics import YOLO
+  ```Python
+  from ultralytics import YOLO
 
-    # Load a model
-    model = YOLO("yolo11n-pose.pt")
+  # Load a model
+  model = YOLO("yolo11n-pose.pt")
 
-    # Export the model
-    # Important: Use opset=12 to ensure WebGPU compatibility
-    model.export(format="onnx", opset=12, dynamic=True)  
-    ```
+  # Export the model
+  # Important: Use opset=12 to ensure WebGPU compatibility
+  model.export(format="onnx", opset=12, dynamic=True)  
+  ```
 
 ### Step 2: Add to the project
 Choose one of the following methods:
@@ -64,14 +64,14 @@ Choose one of the following methods:
   - 🔄 Upload directly through the **Add model** button in the web interface
 
 ### Step 3: Register model in App.jsx
-    ```HTML
-    <select name="model-selector" ref={modelRef} onChange={onModelChange}>
-    {/* Add your model here */}
-    <option value="YOUR_MODEL_NAME">Your Custom Model</option>
-    <option value="yolo11n">yolo11n-2.6M</option>
-    <option value="yolo11s">yolo11s-9.4M</option>
-    </select>
-    ```
+  ```HTML
+  <select name="model-selector" ref={modelRef} onChange={onModelChange}>
+  {/* Add your model here */}
+  <option value="YOUR_MODEL_NAME">Your Custom Model</option>
+  <option value="yolo11n">yolo11n-2.6M</option>
+  <option value="yolo11s">yolo11s-9.4M</option>
+  </select>
+  ```
 
 ### Step 4: Refresh and select your new model 🎉
 
