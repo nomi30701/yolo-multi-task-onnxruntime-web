@@ -5,8 +5,6 @@ import { model_loader } from "./utils/model_loader";
 import { inference_pipeline } from "./utils/inference_pipeline";
 import { draw_bounding_boxes } from "./utils/draw_bounding_boxes";
 
-// TODO: add support phone screen
-
 const DEFAULT_CONFIG = {
   input_shape: [1, 3, 640, 640],
   iou_threshold: 0.35,
@@ -124,7 +122,7 @@ function ImageDisplay({
         src={imgSrc}
         onLoad={onImageLoad}
         hidden={camera_stream}
-        className="block inset-0 w-full max-w-full md:max-w-[720px] max-h-[640px] rounded-lg"
+        className="block md:max-w-[720px] max-h-[640px] rounded-lg"
       />
       <canvas ref={overlayRef} className="absolute"></canvas>
       {isProcessing && (
@@ -522,8 +520,6 @@ function App() {
     overlayRef.current.width = videoRect.width;
     overlayRef.current.height = videoRect.height;
 
-    console.log(cameraRef.current.videoWidth, cameraRef.current.videoHeight);
-
     handle_frame_continuous(ctx);
   }, [sessionRef.current]);
 
@@ -537,12 +533,13 @@ function App() {
         window.lastFrameTime = now;
 
         // Render frame to canvas
+        const videoRect = cameraRef.current.getBoundingClientRect();
         ctx.drawImage(
           cameraRef.current,
           0,
           0,
-          cameraRef.current.videoWidth,
-          cameraRef.current.videoHeight
+          videoRect.width,
+          videoRect.height
         );
 
         try {

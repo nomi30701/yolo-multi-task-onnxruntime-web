@@ -1,5 +1,5 @@
 import * as ort from "onnxruntime-web/webgpu";
-import { preProcess_dynamic, applyNMS } from "./img_preprocess";
+import { preProcess_dynamic, preProcess, applyNMS } from "./img_preprocess";
 
 export const inference_pipeline = async (input_el, session, config) => {
   let input_tensor = null;
