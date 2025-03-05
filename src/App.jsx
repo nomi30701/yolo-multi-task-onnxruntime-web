@@ -17,7 +17,7 @@ const DEFAULT_CONFIG = {
 
 // set Components
 function SettingsPanel({
-  deviceRef,
+  backendRef,
   modelRef,
   taskRef,
   cameraSelectorRef,
@@ -38,13 +38,13 @@ function SettingsPanel({
         <label htmlFor="device-selector">Backend:</label>
         <select
           name="device-selector"
-          ref={deviceRef}
+          ref={backendRef}
           onChange={onModelChange}
           disabled={!isModelLoaded}
           className="ml-2"
         >
-          <option value="webgpu">webGPU</option>
           <option value="wasm">Wasm(cpu)</option>
+          <option value="webgpu">webGPU</option>
         </select>
       </div>
       <div
@@ -286,7 +286,7 @@ function App() {
   // resource reference
   const modelCache = useRef({});
   const canvasContextRef = useRef(null);
-  const deviceRef = useRef(null);
+  const backendRef = useRef(null);
   const modelRef = useRef(null);
   const taskRef = useRef(null);
   const cameraSelectorRef = useRef(null);
@@ -351,7 +351,7 @@ function App() {
     }));
 
     // get model config
-    const backend = deviceRef.current?.value || "webgpu";
+    const backend = backendRef.current?.value || "webgpu";
     const task = taskRef.current?.value || "detect";
     const selectedModel = modelRef.current?.value || "yolo11n";
 
@@ -584,7 +584,7 @@ function App() {
       </h1>
 
       <SettingsPanel
-        deviceRef={deviceRef}
+        backendRef={backendRef}
         modelRef={modelRef}
         taskRef={taskRef}
         cameraSelectorRef={cameraSelectorRef}
