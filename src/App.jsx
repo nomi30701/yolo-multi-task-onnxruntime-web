@@ -75,6 +75,7 @@ function SettingsPanel({
         >
           <option value="detect">Object detection</option>
           <option value="pose">Pose estimation</option>
+          <option value="segment">Segmentation</option>
         </select>
       </div>
       <div
@@ -458,7 +459,8 @@ function App() {
       const [results, results_inferenceTime] = await inference_pipeline(
         imgRef.current,
         sessionRef.current,
-        config
+        config,
+        overlayRef.current
       );
       setDetails(results);
       setModelState((prev) => ({
@@ -546,7 +548,8 @@ function App() {
           const [results, results_inferenceTime] = await inference_pipeline(
             inputCanvasRef.current,
             sessionRef.current,
-            config
+            config,
+            overlayRef.current
           );
 
           // only update state if results change to reduce re-render

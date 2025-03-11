@@ -10,7 +10,7 @@ This web application built on ONNX Runtime Web implements YOLO's multi-task infe
 
 - 🔍 **Object Detection** - Precisely identify and locate various objects
 - 👤 **Pose Estimation** - Track human keypoints and poses
-- 🖼️ **Instance Segmentation** - *(Coming soon)* Pixel-level object area identification
+- 🖼️ **Instance Segmentation** - Pixel-level object area identification
 
 ## 💻 Technical Support
 
@@ -93,6 +93,16 @@ Choose one of the following methods:
 > const xRatio = src_mat.cols / div_width;
 > const yRatio = src_mat.rows / div_height;
 > ```
+>
+> 3. Change Tensor size
+> ```Javascript
+> const input_tensor = new ort.Tensor("float32", src_mat_preProcessed.data32F, [
+>   1,
+>   3,
+>   config.input_shape[2],
+>   config.input_shape[3],
+> ]);
+>
 
 
 > 🚀 WebGPU Support

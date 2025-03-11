@@ -10,9 +10,6 @@ import { Colors } from "./img_preprocess.js";
 export async function draw_bounding_boxes(predictions, task, overlay_el) {
   const ctx = overlay_el.getContext("2d");
 
-  // Clear the canvas
-  ctx.clearRect(0, 0, overlay_el.width, overlay_el.height);
-
   // Calculate diagonal length of the canvas
   const diagonalLength = Math.sqrt(
     Math.pow(overlay_el.width, 2) + Math.pow(overlay_el.height, 2)
@@ -40,6 +37,7 @@ export async function draw_bounding_boxes(predictions, task, overlay_el) {
  * Draw object detection results
  */
 function draw_object_detection(ctx, predictions, lineWidth) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const predictionsByClass = {};
 
   predictions.forEach((predict) => {
@@ -86,6 +84,7 @@ function draw_object_detection(ctx, predictions, lineWidth) {
  */
 function draw_pose_estimation(ctx, predictions, lineWidth) {
   if (!predictions || predictions.length === 0) return;
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   // draw all bounding boxes
   ctx.lineWidth = lineWidth;
@@ -163,8 +162,46 @@ function draw_pose_estimation(ctx, predictions, lineWidth) {
   });
 }
 
-function draw_segmentation() {
-  return;
+function draw_segmentation(ctx, predictions, lineWidth) {
+  const predictionsByClass = {};
+
+  predictions.forEach((predict) => {
+    const classId = predict.class_idx;
+    if (!predictionsByClass[classId]) predictionsByClass[classId] = [];
+    predictionsByClass[classId].push(predict);
+  });
+
+  Object.entries(predictionsByClass).forEach(([classId, items]) => {
+    const color = Colors.getColor(Number(classId), 0.2);
+    const borderColor = Colors.getColor(Number(classId), 0.8);
+    const rgbaFillColor = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${color[3]})`;
+    const rgbaBorderColor = `rgba(${borderColor[0]}, ${borderColor[1]}, ${borderColor[2]}, ${borderColor[3]})`;
+
+    ctx.fillStyle = rgbaFillColor;
+    items.forEach((predict) => {
+      const [x1, y1, width, height] = predict.bbox;
+      ctx.fillRect(x1, y1, width, height);
+    });
+
+    // draw bounding box
+    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = rgbaBorderColor;
+    items.forEach((predict) => {
+      const [x1, y1, width, height] = predict.bbox;
+      ctx.strokeRect(x1, y1, width, height);
+    });
+
+    // draw score text
+    ctx.fillStyle = rgbaBorderColor;
+    ctx.font = "16px Arial";
+    items.forEach((predict) => {
+      const [x1, y1] = predict.bbox;
+      const text = `${classes.class[predict.class_idx]} ${predict.score.toFixed(
+        2
+      )}`;
+      drawTextWithBackground(ctx, text, x1, y1);
+    });
+  });
 }
 
 const fontCache = {
