@@ -477,18 +477,20 @@ function App() {
 
   const handle_ToggleCamera = useCallback(async () => {
     if (camera_stream) {
-      // 停止相機
+      // stop camera
       camera_stream.getTracks().forEach((track) => track.stop());
       cameraRef.current.srcObject = null;
       setCameraStream(null);
       if (overlayRef.current) {
         overlayRef.current.width = 0;
         overlayRef.current.height = 0;
+        overlayRef.current.style.width = `0px`;
+        overlayRef.current.style.height = `0px`;
       }
       setDetails([]);
     } else if (cameraSelectorRef.current && cameraSelectorRef.current.value) {
       try {
-        // 啟動相機
+        // open camera
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             deviceId: cameraSelectorRef.current.value,
@@ -513,14 +515,18 @@ function App() {
       return;
     const ctx = canvasContextRef.current;
 
-    // set input canvas
+    // set input canvas size same as camera size
     ctx.canvas.width = cameraRef.current.videoWidth;
     ctx.canvas.height = cameraRef.current.videoHeight;
 
-    // set screen overlay
+    // set overlay size same as camera size
+    overlayRef.current.width = cameraRef.current.videoWidth;
+    overlayRef.current.height = cameraRef.current.videoHeight;
+
+    // set css ovelay size same as camera size
     const videoRect = cameraRef.current.getBoundingClientRect();
-    overlayRef.current.width = videoRect.width;
-    overlayRef.current.height = videoRect.height;
+    overlayRef.current.style.width = `${videoRect.width}px`;
+    overlayRef.current.style.height = `${videoRect.height}px`;
 
     handle_frame_continuous(ctx);
   }, [sessionRef.current]);
@@ -535,12 +541,13 @@ function App() {
         window.lastFrameTime = now;
 
         // Render frame to canvas
+        const videoRect = cameraRef.current.getBoundingClientRect();
         ctx.drawImage(
           cameraRef.current,
           0,
           0,
-          ctx.canvas.width,
-          ctx.canvas.height
+          cameraRef.current.videoWidth,
+          cameraRef.current.videoHeight
         );
 
         try {
