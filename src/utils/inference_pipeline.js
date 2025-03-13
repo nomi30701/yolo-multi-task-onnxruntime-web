@@ -14,6 +14,7 @@ export const inference_pipeline = async (
 ) => {
   let input_tensor = null;
   let output0 = null;
+  let output1 = null;
 
   try {
     const src_mat = cv.imread(input_el);
@@ -40,11 +41,13 @@ export const inference_pipeline = async (
     src_mat_preProcessed.delete();
 
     const start = performance.now();
-    const { output0, output1 } = await session.run({
+    const outputs = await session.run({
       images: input_tensor,
     });
     const end = performance.now();
     input_tensor.dispose();
+    output0 = outputs.output0;
+    output1 = outputs.output1;
 
     // post process
     let results;
@@ -89,6 +92,7 @@ export const inference_pipeline = async (
   } finally {
     if (input_tensor) input_tensor.dispose();
     if (output0) output0.dispose();
+    if (output1) output1.dispose();
   }
 };
 

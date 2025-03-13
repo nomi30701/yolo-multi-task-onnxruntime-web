@@ -535,13 +535,12 @@ function App() {
         window.lastFrameTime = now;
 
         // Render frame to canvas
-        const videoRect = cameraRef.current.getBoundingClientRect();
         ctx.drawImage(
           cameraRef.current,
           0,
           0,
-          videoRect.width,
-          videoRect.height
+          ctx.canvas.width,
+          ctx.canvas.height
         );
 
         try {
