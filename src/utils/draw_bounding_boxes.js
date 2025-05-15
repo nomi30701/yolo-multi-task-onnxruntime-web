@@ -5,14 +5,13 @@ import { Colors } from "./img_preprocess.js";
  * Draw bounding boxes in overlay canvas based on task type.
  * @param {Array[Object]} predictions - Detection/pose results
  * @param {string} task - Task type: "detect", "pose", or "segment"
- * @param {HTMLCanvasElement} overlay_el - Show boxes in overlay canvas element
+ * @param {HTMLCanvasElement} overlay_ctx - Show boxes in overlay canvas element
  */
-export async function draw_bounding_boxes(predictions, task, overlay_el) {
-  const ctx = overlay_el.getContext("2d");
-
+export async function draw_bounding_boxes(predictions, task, overlay_ctx) {
   // Calculate diagonal length of the canvas
   const diagonalLength = Math.sqrt(
-    Math.pow(overlay_el.width, 2) + Math.pow(overlay_el.height, 2)
+    Math.pow(overlay_ctx.canvas.width, 2) +
+      Math.pow(overlay_ctx.canvas.height, 2)
   );
   const lineWidth = diagonalLength / 250;
 
@@ -21,14 +20,14 @@ export async function draw_bounding_boxes(predictions, task, overlay_el) {
   // Draw predictions based on task type
   switch (task) {
     case "pose":
-      draw_pose_estimation(ctx, predictions, lineWidth);
+      draw_pose_estimation(overlay_ctx, predictions, lineWidth);
       break;
     case "segment":
-      draw_segmentation(ctx, predictions, lineWidth);
+      draw_segmentation(overlay_ctx, predictions, lineWidth);
       break;
     case "detect":
     default:
-      draw_object_detection(ctx, predictions, lineWidth);
+      draw_object_detection(overlay_ctx, predictions, lineWidth);
       break;
   }
 }
@@ -37,10 +36,11 @@ export async function draw_bounding_boxes(predictions, task, overlay_el) {
  * Draw object detection results
  */
 function draw_object_detection(ctx, predictions, lineWidth) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!predictions || predictions.length === 0) return;
   const predictionsByClass = {};
+  const bbox_predictions = predictions.bbox_results;
 
-  predictions.forEach((predict) => {
+  bbox_predictions.forEach((predict) => {
     const classId = predict.class_idx;
     if (!predictionsByClass[classId]) predictionsByClass[classId] = [];
     predictionsByClass[classId].push(predict);
@@ -84,12 +84,12 @@ function draw_object_detection(ctx, predictions, lineWidth) {
  */
 function draw_pose_estimation(ctx, predictions, lineWidth) {
   if (!predictions || predictions.length === 0) return;
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  const bbox_predictions = predictions.bbox_results;
 
   // draw all bounding boxes
   ctx.lineWidth = lineWidth;
   ctx.strokeStyle = "green";
-  predictions.forEach((predict) => {
+  bbox_predictions.forEach((predict) => {
     const [x1, y1, width, height] = predict.bbox;
     ctx.strokeRect(x1, y1, width, height);
   });
@@ -97,7 +97,7 @@ function draw_pose_estimation(ctx, predictions, lineWidth) {
   // 2. draw all scores
   ctx.fillStyle = "green";
   ctx.font = fontCache.font;
-  predictions.forEach((predict) => {
+  bbox_predictions.forEach((predict) => {
     const [x1, y1] = predict.bbox;
     const text = `score ${predict.score.toFixed(2)}`;
     drawTextWithBackground(ctx, text, x1, y1);
@@ -131,7 +131,7 @@ function draw_pose_estimation(ctx, predictions, lineWidth) {
   ];
 
   // connect all keypoints
-  predictions.forEach((predict) => {
+  bbox_predictions.forEach((predict) => {
     if (!predict.keypoints) return;
 
     SKELETON.forEach(([i, j]) => {
@@ -148,7 +148,7 @@ function draw_pose_estimation(ctx, predictions, lineWidth) {
 
   // draw all keypoints
   ctx.fillStyle = "red";
-  predictions.forEach((predict) => {
+  bbox_predictions.forEach((predict) => {
     if (!predict.keypoints) return;
 
     predict.keypoints.forEach((keypoint) => {
@@ -163,9 +163,16 @@ function draw_pose_estimation(ctx, predictions, lineWidth) {
 }
 
 function draw_segmentation(ctx, predictions, lineWidth) {
-  const predictionsByClass = {};
+  if (!predictions || predictions.length === 0) return;
 
-  predictions.forEach((predict) => {
+  // render mask
+  if (predictions.mask_imgData) {
+    ctx.putImageData(predictions.mask_imgData, 0, 0);
+  }
+  const predictionsByClass = {};
+  const bbox_predictions = predictions.bbox_results;
+
+  bbox_predictions.forEach((predict) => {
     const classId = predict.class_idx;
     if (!predictionsByClass[classId]) predictionsByClass[classId] = [];
     predictionsByClass[classId].push(predict);

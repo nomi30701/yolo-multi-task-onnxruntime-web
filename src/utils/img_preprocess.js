@@ -1,15 +1,55 @@
+import cv from "@techstark/opencv-js";
+import * as ort from "onnxruntime-web/webgpu";
+
+/**
+ * Pre-process input image.
+ *
+ * @param {cv.Mat} src_mat - input image Mat
+ * @param {[Number, Number]} size - Output size [width, height]
+ * @param {String} imgsz_type - Processing type, "dynamic" or "zeroPad"
+ * @returns {[ort.Tensor, Number, Number]} - return [input_tensor, xRatio, yRatio]
+ */
+const preProcess_img = (src_mat, size, imgsz_type) => {
+  let preProcessed, xRatio, yRatio, input_tensor, div_width, div_height;
+
+  if (imgsz_type === "dynamic") {
+    [preProcessed, xRatio, yRatio, div_width, div_height] = img_dynamic(
+      src_mat,
+      size
+    );
+    input_tensor = new ort.Tensor(
+      "float32",
+      preProcessed.data32F,
+      [1, 3, div_height, div_width] // [batch, channel, height, width]
+    );
+  } else if (imgsz_type === "zeroPad") {
+    const model_size = [640, 640]; // yolo model default input size
+    [preProcessed, xRatio, yRatio] = img_zeroPad(src_mat, model_size, size);
+    input_tensor = new ort.Tensor(
+      "float32",
+      preProcessed.data32F,
+      [1, 3, model_size[1], model_size[0]] // [batch, channel, height, width]
+    );
+  }
+  preProcessed.delete();
+
+  return [input_tensor, xRatio, yRatio];
+};
+
 /**
  * Pre process input image.
  *
- * Resize and normalize image.
- *
+ * Zero padding to square and resize to input size.
  *
  * @param {cv.Mat} mat - Pre process yolo model input image.
- * @param {Number} input_width - Yolo model input width.
- * @param {Number} input_height - Yolo model input height.
- * @returns {cv.Mat} Processed input mat.
+ * @param {Number} model_size - Yolo model image size input [width, height].
+ * @param {Number} output_size - Overlay image size [width, height].
+ * @returns {[cv.Mat, Number, Number]} Processed input mat, xRatio, yRatio.
  */
-const preProcess = (mat, input_width, input_height) => {
+const img_zeroPad = (mat, model_size, output_size) => {
+  const original_width = mat.cols;
+  const original_height = mat.rows;
+
   cv.cvtColor(mat, mat, cv.COLOR_RGBA2RGB);
 
   // Resize to dimensions divisible by 32
@@ -29,50 +69,48 @@ const preProcess = (mat, input_width, input_height) => {
     right_pad,
     cv.BORDER_CONSTANT,
     new cv.Scalar(0, 0, 0)
-  );
+  ); // padding to square
 
-  // Calculate ratios
-  const xRatio = mat.cols / input_width;
-  const yRatio = mat.rows / input_height;
-
-  // Resize to input dimensions and normalize to [0, 1]
+  // Resize to input size and normalize to [0, 1]
   const preProcessed = cv.blobFromImage(
     mat,
     1 / 255.0,
-    new cv.Size(input_width, input_height),
-    new cv.Scalar(0, 0, 0),
+    { width: model_size[0], height: model_size[1] },
+    [0, 0, 0, 0],
     false,
     false
   );
+
+  const xRatio = (output_size[0] / div_width) * (max_dim / model_size[0]);
+  const yRatio = (output_size[1] / div_height) * (max_dim / model_size[1]);
 
   return [preProcessed, xRatio, yRatio];
 };
 
 /**
- * Pre process input image.
- *
- * Normalize image.
+ * Pre process input image for dynamic input model.
  *
  * @param {cv.Mat} mat - Pre process yolo model input image.
- * @param {Number} input_width - Yolo model input width.
- * @param {Number} input_height - Yolo model input height.
- * @returns {cv.Mat} Processed input mat.
+ * @returns {[cv.mat, Number, Number ...]} Processed input mat, xRatio, yRatio, div_width, div_height.
  */
-const preProcess_dynamic = (mat) => {
+const img_dynamic = (mat, size) => {
   cv.cvtColor(mat, mat, cv.COLOR_RGBA2RGB);
 
   // resize image to divisible by 32
   const [div_width, div_height] = divStride(32, mat.cols, mat.rows);
+
   // resize, normalize to [0, 1]
   const preProcessed = cv.blobFromImage(
     mat,
     1 / 255.0,
-    new cv.Size(div_width, div_height),
-    new cv.Scalar(0, 0, 0),
+    { width: div_width, height: div_height },
+    [0, 0, 0, 0],
     false,
     false
   );
-  return [preProcessed, div_width, div_height];
+  const xRatio = size[0] / div_width; // scale factor for overlay
+  const yRatio = size[1] / div_height;
+  return [preProcessed, xRatio, yRatio, div_width, div_height];
 };
 
 /**
@@ -100,6 +138,11 @@ function calculateIOU(box1, box2) {
   const [x1, y1, w1, h1] = box1;
   const [x2, y2, w2, h2] = box2;
 
+  // check if boxes are valid
+  if (x1 > x2 + w2 || x2 > x1 + w1 || y1 > y2 + h2 || y2 > y1 + h1) {
+    return 0.0;
+  }
+
   const box1_x2 = x1 + w1;
   const box1_y2 = y1 + h1;
   const box2_x2 = x2 + w2;
@@ -110,10 +153,6 @@ function calculateIOU(box1, box2) {
   const intersect_x2 = Math.min(box1_x2, box2_x2);
   const intersect_y2 = Math.min(box1_y2, box2_y2);
 
-  if (intersect_x2 <= intersect_x1 || intersect_y2 <= intersect_y1) {
-    return 0.0;
-  }
-
   const intersection =
     (intersect_x2 - intersect_x1) * (intersect_y2 - intersect_y1);
   const box1_area = w1 * h1;
@@ -122,23 +161,45 @@ function calculateIOU(box1, box2) {
   return intersection / (box1_area + box2_area - intersection);
 }
 
-function applyNMS(boxes, scores, iou_threshold = 0.35) {
-  const picked = [];
-  const indexes = Array.from(Array(scores.length).keys());
+function applyNMS(boxes, scores, iou_threshold = 0.7) {
+  const n = scores.length;
+  if (n === 0) return [];
 
+  // pre calculate areas
+  const areas = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const [, , w, h] = boxes[i].bbox;
+    areas[i] = w * h;
+  }
+
+  // sort indexes by scores
+  const indexes = new Uint32Array(n);
+  for (let i = 0; i < n; i++) indexes[i] = i;
+
+  // sort indexes by scores in descending order
   indexes.sort((a, b) => scores[b] - scores[a]);
 
-  while (indexes.length > 0) {
-    const current = indexes[0];
-    picked.push(current);
+  // use bitmap to track suppressed boxes
+  const suppress = new Uint8Array(n);
+  const picked = [];
 
-    const rest = indexes.slice(1);
-    indexes.length = 0;
+  for (let i = 0; i < n; i++) {
+    const idx = indexes[i];
 
-    for (const idx of rest) {
-      const iou = calculateIOU(boxes[current].bbox, boxes[idx].bbox);
-      if (iou <= iou_threshold) {
-        indexes.push(idx);
+    if (suppress[idx]) continue;
+
+    picked.push(idx);
+
+    // check remaining boxes
+    for (let j = i + 1; j < n; j++) {
+      const otherIdx = indexes[j];
+
+      if (suppress[otherIdx]) continue;
+
+      const iou = calculateIOU(boxes[idx].bbox, boxes[otherIdx].bbox);
+
+      if (iou > iou_threshold) {
+        suppress[otherIdx] = 1;
       }
     }
   }
@@ -200,4 +261,4 @@ class Colors {
   }
 }
 
-export { preProcess, preProcess_dynamic, applyNMS, Colors };
+export { preProcess_img, applyNMS, Colors };

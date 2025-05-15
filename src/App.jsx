@@ -1,63 +1,71 @@
 import "./assets/App.css";
-import classes from "./utils/yolo_classes.json";
+import cv from "@techstark/opencv-js";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { model_loader } from "./utils/model_loader";
 import { inference_pipeline } from "./utils/inference_pipeline";
 import { draw_bounding_boxes } from "./utils/draw_bounding_boxes";
+import classes from "./utils/yolo_classes.json";
 
-const DEFAULT_CONFIG = {
+const MODEL_CONFIG = {
   input_shape: [1, 3, 640, 640],
   iou_threshold: 0.35,
   score_threshold: 0.45,
-  backend: "webgpu",
+  backend: "wasm",
+  model: "yolo11n",
+  model_path: "",
   task: "detect",
+  imgsz_type: "dynamic",
 };
 
 // set Components
 function SettingsPanel({
-  backendRef,
-  modelRef,
-  taskRef,
+  backendSelectorRef,
+  modelSelectorRef,
+  taskSelectorRef,
   cameraSelectorRef,
+  imgszTypeSelectorRef,
+  modelConfigRef,
   cameras,
   customModels,
-  onModelChange,
-  isModelLoaded,
+  loadModel,
+  activeFeature,
 }) {
   return (
     <div
       id="setting-container"
       className="container text-lg flex flex-col md:flex-row md:justify-evenly gap-2 md:gap-6"
     >
-      <div
-        id="device-selector-container"
-        className="flex items-center justify-between md:justify-start"
-      >
-        <label htmlFor="device-selector">Backend:</label>
+      <div id="selector-container">
+        <label>Backend:</label>
         <select
           name="device-selector"
-          ref={backendRef}
-          onChange={onModelChange}
-          disabled={!isModelLoaded}
+          ref={backendSelectorRef}
+          onChange={(e) => {
+            modelConfigRef.current.backend = e.target.value;
+            loadModel();
+          }}
+          disabled={activeFeature !== null}
           className="ml-2"
         >
           <option value="wasm">Wasm(cpu)</option>
           <option value="webgpu">webGPU</option>
         </select>
       </div>
-      <div
-        id="model-selector-container"
-        className="flex items-center justify-between md:justify-start"
-      >
-        <label htmlFor="model-selector">Model:</label>
+      <div id="selector-container">
+        <label>Model:</label>
         <select
           name="model-selector"
-          ref={modelRef}
-          onChange={onModelChange}
+          ref={modelSelectorRef}
+          onChange={(e) => {
+            modelConfigRef.current.model = e.target.value;
+            loadModel();
+          }}
+          disabled={activeFeature !== null}
           className="ml-2"
         >
           <option value="yolo11n">yolo11n-2.6M</option>
           <option value="yolo11s">yolo11s-9.4M</option>
+          {/* <option value="your-custom-model">Your Custom Model</option> */}
           {customModels.map((model, index) => (
             <option key={index} value={model.url}>
               {model.name}
@@ -65,30 +73,49 @@ function SettingsPanel({
           ))}
         </select>
       </div>
-      <div className="flex items-center justify-between md:justify-start">
-        <label htmlFor="task-selector">Task:</label>
+      <div>
+        <label>Task:</label>
         <select
           name="task-selector"
-          ref={taskRef}
-          onChange={onModelChange}
+          ref={taskSelectorRef}
+          onChange={(e) => {
+            modelConfigRef.current.task = e.target.value;
+            loadModel();
+          }}
+          disabled={activeFeature !== null}
           className="ml-2"
         >
-          <option value="detect">Object detection</option>
-          <option value="pose">Pose estimation</option>
-          <option value="segment">Segmentation</option>
+          <option value="detect">Obj detect</option>
+          <option value="pose">Pose estimat</option>
+          <option value="segment">Segment</option>
         </select>
       </div>
-      <div
-        id="camera-selector-container"
-        className="flex items-center justify-between md:justify-start"
-      >
-        <label htmlFor="camera-selector">Camera:</label>
-        <select ref={cameraSelectorRef} className="ml-2">
+      <div id="selector-container">
+        <label>Camera:</label>
+        <select
+          ref={cameraSelectorRef}
+          disabled={activeFeature !== null}
+          className="ml-2"
+        >
           {cameras.map((camera, index) => (
             <option key={index} value={camera.deviceId}>
               {camera.label || `Camera ${index + 1}`}
             </option>
           ))}
+        </select>
+      </div>
+      <div id="selector-container">
+        <label>Imgsz_type:</label>
+        <select
+          disabled={activeFeature !== null}
+          ref={imgszTypeSelectorRef}
+          onChange={(e) => {
+            modelConfigRef.current.imgsz_type = e.target.value;
+          }}
+          className="ml-2"
+        >
+          <option value="dynamic">Dynamic</option>
+          <option value="zeroPad">Zero Pad</option>
         </select>
       </div>
     </div>
@@ -97,24 +124,21 @@ function SettingsPanel({
 
 // Display Components
 function ImageDisplay({
-  inputCanvasRef,
   cameraRef,
   imgRef,
   overlayRef,
   imgSrc,
-  camera_stream,
   onCameraLoad,
   onImageLoad,
-  isProcessing,
+  activeFeature,
 }) {
   return (
     <div className="container bg-stone-700 shadow-lg relative min-h-[320px] flex justify-center items-center">
-      <canvas ref={inputCanvasRef} hidden></canvas>
       <video
-        className="block w-full max-w-full md:max-w-[720px] max-h-[640px] rounded-lg inset-0 mx-auto"
+        className="block md:max-w-[720px] max-h-[640px] rounded-lg mx-auto"
         ref={cameraRef}
-        onLoadedData={onCameraLoad}
-        hidden={!camera_stream}
+        onLoadedMetadata={onCameraLoad}
+        hidden={activeFeature !== "camera"}
         autoPlay
       />
       <img
@@ -122,42 +146,39 @@ function ImageDisplay({
         ref={imgRef}
         src={imgSrc}
         onLoad={onImageLoad}
-        hidden={camera_stream}
+        hidden={activeFeature !== "image"}
         className="block md:max-w-[720px] max-h-[640px] rounded-lg"
       />
-      <canvas ref={overlayRef} className="absolute"></canvas>
-      {isProcessing && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white">
-          <div className="animate-pulse text-xl">Processing...</div>
-        </div>
-      )}
+      <canvas
+        ref={overlayRef}
+        hidden={activeFeature === null}
+        className="absolute"
+      ></canvas>
     </div>
   );
 }
 
 // button Components
 function ControlButtons({
-  camera_stream,
-  cameras,
   imgSrc,
-  isModelLoaded,
-  openImageRef,
-  onOpenImageClick,
-  onToggleCamera,
-  onAddModel,
+  fileVideoRef,
+  fileImageRef,
+  handle_OpenVideo,
+  handle_OpenImage,
+  handle_ToggleCamera,
+  handle_AddModel,
+  activeFeature,
 }) {
   return (
     <div id="btn-container" className="container flex justify-around gap-x-4">
       <input
         type="file"
-        accept="image/*"
+        accept="video/mp4"
         hidden
-        ref={openImageRef}
+        ref={fileVideoRef}
         onChange={(e) => {
           if (e.target.files[0]) {
-            const file = e.target.files[0];
-            const imgUrl = URL.createObjectURL(file);
-            onOpenImageClick(imgUrl);
+            handle_OpenVideo(e.target.files[0]);
             e.target.value = null;
           }
         }}
@@ -165,24 +186,47 @@ function ControlButtons({
 
       <button
         className="btn"
-        disabled={camera_stream || !isModelLoaded}
-        onClick={() =>
-          imgSrc ? onOpenImageClick() : openImageRef.current.click()
-        }
+        onClick={() => fileVideoRef.current.click()}
+        disabled={activeFeature !== null}
       >
-        {imgSrc ? "Close Image" : "Open Image"}
+        Open video
+      </button>
+
+      <input
+        type="file"
+        accept="image/*"
+        hidden
+        ref={fileImageRef}
+        onChange={(e) => {
+          if (e.target.files[0]) {
+            const file = e.target.files[0];
+            const imgUrl = URL.createObjectURL(file);
+            handle_OpenImage(imgUrl);
+            e.target.value = null;
+          }
+        }}
+      />
+
+      <button
+        className="btn"
+        onClick={() =>
+          imgSrc ? handle_OpenImage() : fileImageRef.current.click()
+        }
+        disabled={activeFeature !== null && activeFeature !== "image"}
+      >
+        {activeFeature === "image" ? "Close Image" : "Open Image"}
       </button>
 
       <button
         className="btn"
-        onClick={onToggleCamera}
-        disabled={cameras.length === 0 || imgSrc || !isModelLoaded}
+        onClick={handle_ToggleCamera}
+        disabled={activeFeature !== null && activeFeature !== "camera"}
       >
-        {camera_stream ? "Close Camera" : "Open Camera"}
+        {activeFeature === "camera" ? "Close Camera" : "Open Camera"}
       </button>
 
-      <label className="btn cursor-pointer">
-        <input type="file" accept=".onnx" onChange={onAddModel} hidden />
+      <label className="btn">
+        <input type="file" accept=".onnx" onChange={handle_AddModel} hidden />
         <span>Add model</span>
       </label>
     </div>
@@ -216,10 +260,23 @@ function ModelStatus({ warnUpTime, inferenceTime, statusMsg, statusColor }) {
 }
 
 function ResultsTable({ details }) {
+  if (details.length === 0) {
+    return (
+      <details className="text-gray-200 group px-2">
+        <summary className="my-2 hover:text-gray-400 cursor-pointer transition-colors duration-300">
+          Detection Results ( {details.length} )
+        </summary>
+        <div className="transition-all duration-300 ease-in-out transform origin-top group-open:animate-details-show">
+          <p className="text-center text-gray-400 py-2">No object detected</p>
+        </div>
+      </details>
+    );
+  }
+
   return (
     <details className="text-gray-200 group px-2">
       <summary className="my-5 hover:text-gray-400 cursor-pointer transition-colors duration-300">
-        Detected objects
+        Detection Results ( {details.length} )
       </summary>
       <div
         className="transition-all duration-300 ease-in-out transform origin-top
@@ -232,7 +289,7 @@ function ResultsTable({ details }) {
           <thead className="bg-gray-700">
             <tr>
               <th className="border-b border-gray-600 p-2 md:p-4 text-gray-100">
-                Number
+                ID
               </th>
               <th className="border-b border-gray-600 p-2 md:p-4 text-gray-100">
                 ClassName
@@ -249,7 +306,7 @@ function ResultsTable({ details }) {
                 className="hover:bg-gray-700 transition-colors text-gray-300"
               >
                 <td className="border-b border-gray-600 p-2 md:p-4">
-                  {index + 1}
+                  {index}
                 </td>
                 <td className="border-b border-gray-600 p-2 md:p-4">
                   {classes.class[item.class_idx]}
@@ -268,120 +325,105 @@ function ResultsTable({ details }) {
 
 function App() {
   const [modelState, setModelState] = useState({
-    isLoaded: false,
     warnUpTime: 0,
     inferenceTime: 0,
     statusMsg: "Model not loaded",
     statusColor: "inherit",
   });
-  const {
-    isLoaded: isModelLoaded,
-    warnUpTime,
-    inferenceTime,
-    statusMsg,
-    statusColor,
-  } = modelState;
+  const { warnUpTime, inferenceTime, statusMsg, statusColor } = modelState;
+
+  const modelConfigRef = useRef(MODEL_CONFIG);
 
   // resource reference
-  const modelCache = useRef({});
-  const canvasContextRef = useRef(null);
-  const backendRef = useRef(null);
-  const modelRef = useRef(null);
-  const taskRef = useRef(null);
+  const backendSelectorRef = useRef(null);
+  const modelSelectorRef = useRef(null);
+  const taskSelectorRef = useRef(null);
   const cameraSelectorRef = useRef(null);
+  const imgszTypeSelectorRef = useRef(null);
   const sessionRef = useRef(null);
+  const modelCache = useRef({});
 
   // content reference
   const imgRef = useRef(null);
   const overlayRef = useRef(null);
   const cameraRef = useRef(null);
-  const inputCanvasRef = useRef(null);
-  const openImageRef = useRef(null);
+  const fileImageRef = useRef(null);
+  const fileVideoRef = useRef(null);
 
   // state
   const [customModels, setCustomModels] = useState([]);
   const [cameras, setCameras] = useState([]);
-  const [camera_stream, setCameraStream] = useState(null);
   const [imgSrc, setImgSrc] = useState(null);
   const [details, setDetails] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [config, setConfig] = useState({ ...DEFAULT_CONFIG });
+  const [activeFeature, setActiveFeature] = useState(null); // null, 'video', 'image', 'camera'
 
-  // init
+  // worker
+  const videoWorkerRef = useRef(null);
+
+  // Init page
   useEffect(() => {
     loadModel();
     getCameras();
 
-    return () => {
-      // cleanup
-      if (camera_stream) {
-        camera_stream.getTracks().forEach((track) => track.stop());
+    videoWorkerRef.current = new Worker(
+      new URL("./utils/video_process_worker.js", import.meta.url),
+      {
+        type: "module",
       }
-
-      // cleanup custom models
-      customModels.forEach((model) => {
-        if (model.url && model.url.startsWith("blob:")) {
-          URL.revokeObjectURL(model.url);
-        }
-      });
-
-      if (imgSrc && imgSrc.startsWith("blob:")) {
-        URL.revokeObjectURL(imgSrc);
+    );
+    videoWorkerRef.current.onmessage = (e) => {
+      setModelState((prev) => ({
+        ...prev,
+        statusMsg: e.data.statusMsg,
+      }));
+      if (e.data.processedVideo) {
+        const url = URL.createObjectURL(e.data.processedVideo);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "processed_video.mp4";
+        a.click();
+        URL.revokeObjectURL(url);
+        setActiveFeature(null);
       }
     };
   }, []);
 
-  // init canvas context
-  useEffect(() => {
-    if (inputCanvasRef.current) {
-      canvasContextRef.current = inputCanvasRef.current.getContext("2d", {
-        willReadFrequently: true,
-      });
-    }
-  }, []);
-
   const loadModel = useCallback(async () => {
-    // update model state
+    // Update model state
     setModelState((prev) => ({
       ...prev,
       statusMsg: "Loading model...",
       statusColor: "red",
-      isLoaded: false,
     }));
+    setActiveFeature("loading");
 
-    // get model config
-    const backend = backendRef.current?.value || "webgpu";
-    const task = taskRef.current?.value || "detect";
-    const selectedModel = modelRef.current?.value || "yolo11n";
+    const modelConfig = modelConfigRef.current;
 
-    // update config
-    const newConfig = { ...DEFAULT_CONFIG, backend, task };
-    setConfig(newConfig);
-
+    // Get model path
     const customModel = customModels.find(
-      (model) => model.url === selectedModel
+      (model) => model.url === modelConfig.model
     );
-
     const model_path = customModel
       ? customModel.url
-      : `${window.location.href}/models/${selectedModel}-${task}-simplify-dynamic.onnx`;
+      : `${window.location.href}/models/${modelConfig.model}-${modelConfig.task}.onnx`;
+    modelConfig.model_path = model_path;
 
-    const cacheKey = `${selectedModel}-${task}-${backend}`;
+    const cacheKey = `${modelConfig.model}-${modelConfig.task}-${modelConfig.backend}`;
     if (modelCache.current[cacheKey]) {
       sessionRef.current = modelCache.current[cacheKey];
       setModelState((prev) => ({
         ...prev,
         statusMsg: "Model loaded from cache",
         statusColor: "green",
-        isLoaded: true,
       }));
+      setActiveFeature(null);
       return;
     }
 
     try {
-      // load model
+      // Load model
       const start = performance.now();
-      const yolo_model = await model_loader(model_path, newConfig);
+      const yolo_model = await model_loader(model_path, modelConfig.backend);
       const end = performance.now();
 
       sessionRef.current = yolo_model;
@@ -392,16 +434,16 @@ function App() {
         statusMsg: "Model loaded",
         statusColor: "green",
         warnUpTime: (end - start).toFixed(2),
-        isLoaded: true,
       }));
     } catch (error) {
       setModelState((prev) => ({
         ...prev,
         statusMsg: "Model loading failed",
         statusColor: "red",
-        isLoaded: false,
       }));
       console.error(error);
+    } finally {
+      setActiveFeature(null);
     }
   }, [customModels]);
 
@@ -433,61 +475,62 @@ function App() {
     (imgUrl = null) => {
       if (imgUrl) {
         setImgSrc(imgUrl);
+        setActiveFeature("image");
       } else if (imgSrc) {
         if (imgSrc.startsWith("blob:")) {
           URL.revokeObjectURL(imgSrc);
         }
-        setImgSrc("");
-        if (overlayRef.current) {
-          overlayRef.current.width = 0;
-          overlayRef.current.height = 0;
-        }
+        overlayRef.current.width = 0;
+        overlayRef.current.height = 0;
+        setImgSrc(null);
         setDetails([]);
+        setActiveFeature(null);
       }
     },
     [imgSrc]
   );
 
   const handle_ImageLoad = useCallback(async () => {
-    if (!imgRef.current || !overlayRef.current || !sessionRef.current) return;
-
-    setIsProcessing(true);
     overlayRef.current.width = imgRef.current.width;
     overlayRef.current.height = imgRef.current.height;
 
     try {
+      const src_mat = cv.imread(imgRef.current);
       const [results, results_inferenceTime] = await inference_pipeline(
-        imgRef.current,
+        src_mat,
         sessionRef.current,
-        config,
-        overlayRef.current
+        [overlayRef.current.width, overlayRef.current.height],
+        modelConfigRef.current
       );
-      setDetails(results);
+      const overlayCtx = overlayRef.current.getContext("2d");
+      overlayCtx.clearRect(
+        0,
+        0,
+        overlayCtx.canvas.width,
+        overlayCtx.canvas.height
+      );
+
+      draw_bounding_boxes(results, modelConfigRef.current.task, overlayCtx);
+      setDetails(results.bbox_results);
       setModelState((prev) => ({
         ...prev,
         inferenceTime: results_inferenceTime,
       }));
-      draw_bounding_boxes(results, config.task, overlayRef.current);
     } catch (error) {
       console.error("Image processing error:", error);
-    } finally {
-      setIsProcessing(false);
     }
-  }, [config, sessionRef.current]);
+  }, [sessionRef.current]);
 
   const handle_ToggleCamera = useCallback(async () => {
-    if (camera_stream) {
+    if (cameraRef.current.srcObject) {
       // stop camera
-      camera_stream.getTracks().forEach((track) => track.stop());
+      cameraRef.current.srcObject.getTracks().forEach((track) => track.stop());
       cameraRef.current.srcObject = null;
-      setCameraStream(null);
-      if (overlayRef.current) {
-        overlayRef.current.width = 0;
-        overlayRef.current.height = 0;
-        overlayRef.current.style.width = `0px`;
-        overlayRef.current.style.height = `0px`;
-      }
+      overlayRef.current.width = 0;
+      overlayRef.current.height = 0;
+
       setDetails([]);
+      setActiveFeature(null);
     } else if (cameraSelectorRef.current && cameraSelectorRef.current.value) {
       try {
         // open camera
@@ -497,130 +540,120 @@ function App() {
           },
           audio: false,
         });
-        setCameraStream(stream);
         cameraRef.current.srcObject = stream;
+        setActiveFeature("camera");
       } catch (err) {
         console.error("Error accessing camera:", err);
       }
     }
-  }, [camera_stream]);
+  }, []);
 
   const handle_cameraLoad = useCallback(() => {
-    if (
-      !cameraRef.current ||
-      !canvasContextRef.current ||
-      !inputCanvasRef.current ||
-      !overlayRef.current
-    )
-      return;
-    const ctx = canvasContextRef.current;
+    overlayRef.current.width = cameraRef.current.clientWidth;
+    overlayRef.current.height = cameraRef.current.clientHeight;
 
-    // set input canvas size same as camera size
-    ctx.canvas.width = cameraRef.current.videoWidth;
-    ctx.canvas.height = cameraRef.current.videoHeight;
+    let inputCanvas = new OffscreenCanvas(
+      cameraRef.current.videoWidth,
+      cameraRef.current.videoHeight
+    );
+    let ctx = inputCanvas.getContext("2d", {
+      willReadFrequently: true,
+    });
 
-    // set overlay size same as camera size
-    overlayRef.current.width = cameraRef.current.videoWidth;
-    overlayRef.current.height = cameraRef.current.videoHeight;
+    const handle_frame_continuous = async () => {
+      if (!cameraRef.current?.srcObject) {
+        inputCanvas = null;
+        ctx = null;
+        return;
+      }
+      ctx.drawImage(
+        cameraRef.current,
+        0,
+        0,
+        cameraRef.current.videoWidth,
+        cameraRef.current.videoHeight
+      ); // draw camera frame to input canvas
+      const src_mat = cv.imread(inputCanvas);
+      const [results, results_inferenceTime] = await inference_pipeline(
+        src_mat,
+        sessionRef.current,
+        [overlayRef.current.width, overlayRef.current.height],
+        modelConfigRef.current
+      );
+      const overlayCtx = overlayRef.current.getContext("2d");
+      overlayCtx.clearRect(
+        0,
+        0,
+        overlayCtx.canvas.width,
+        overlayCtx.canvas.height
+      );
+      draw_bounding_boxes(results, modelConfigRef.current.task, overlayCtx);
 
-    // set css ovelay size same as camera size
-    const videoRect = cameraRef.current.getBoundingClientRect();
-    overlayRef.current.style.width = `${videoRect.width}px`;
-    overlayRef.current.style.height = `${videoRect.height}px`;
+      setDetails(results.bbox_results);
+      setModelState((prev) => ({
+        ...prev,
+        inferenceTime: results_inferenceTime,
+      }));
 
-    handle_frame_continuous(ctx);
+      requestAnimationFrame(handle_frame_continuous);
+    };
+    requestAnimationFrame(handle_frame_continuous);
   }, [sessionRef.current]);
 
-  const handle_frame_continuous = useCallback(
-    async (ctx) => {
-      if (!cameraRef.current?.srcObject) return;
-
-      // 30fps
-      const now = performance.now();
-      if (!window.lastFrameTime || now - window.lastFrameTime > 33) {
-        window.lastFrameTime = now;
-
-        // Render frame to canvas
-        const videoRect = cameraRef.current.getBoundingClientRect();
-        ctx.drawImage(
-          cameraRef.current,
-          0,
-          0,
-          cameraRef.current.videoWidth,
-          cameraRef.current.videoHeight
-        );
-
-        try {
-          const [results, results_inferenceTime] = await inference_pipeline(
-            inputCanvasRef.current,
-            sessionRef.current,
-            config,
-            overlayRef.current
-          );
-
-          // only update state if results change to reduce re-render
-          if (JSON.stringify(results) !== JSON.stringify(details)) {
-            setDetails(results);
-          }
-
-          // only update state if inference time changes to reduce re-render
-          if (results_inferenceTime !== inferenceTime) {
-            setModelState((prev) => ({
-              ...prev,
-              inferenceTime: results_inferenceTime,
-            }));
-          }
-
-          draw_bounding_boxes(results, config.task, overlayRef.current);
-        } catch (error) {
-          console.error("Frame processing error:", error);
-        }
-      }
-
-      // next frame
-      requestAnimationFrame(() => handle_frame_continuous(ctx));
-    },
-    [config, sessionRef.current, details, inferenceTime]
-  );
+  const handle_OpenVideo = useCallback((file) => {
+    if (file) {
+      videoWorkerRef.current.postMessage(
+        {
+          file: file,
+          modelConfig: modelConfigRef.current,
+        },
+        []
+      );
+      setActiveFeature("video");
+    } else {
+      setActiveFeature(null);
+    }
+  }, []);
 
   return (
     <>
       <h1 className="my-4 md:my-8 text-3xl md:text-4xl px-2">
-        Yolo multi task onnx web
+        Yolo multi object tracking onnx web
       </h1>
 
       <SettingsPanel
-        backendRef={backendRef}
-        modelRef={modelRef}
-        taskRef={taskRef}
+        backendSelectorRef={backendSelectorRef}
+        modelSelectorRef={modelSelectorRef}
+        taskSelectorRef={taskSelectorRef}
         cameraSelectorRef={cameraSelectorRef}
+        imgszTypeSelectorRef={imgszTypeSelectorRef}
+        modelConfigRef={modelConfigRef}
         cameras={cameras}
         customModels={customModels}
-        onModelChange={loadModel}
-        isModelLoaded={isModelLoaded}
+        loadModel={loadModel}
+        activeFeature={activeFeature}
       />
 
       <ImageDisplay
-        inputCanvasRef={inputCanvasRef}
         cameraRef={cameraRef}
         imgRef={imgRef}
         overlayRef={overlayRef}
         imgSrc={imgSrc}
-        camera_stream={camera_stream}
         onCameraLoad={handle_cameraLoad}
         onImageLoad={handle_ImageLoad}
-        isProcessing={isProcessing}
+        activeFeature={activeFeature}
       />
 
       <ControlButtons
-        camera_stream={camera_stream}
         cameras={cameras}
         imgSrc={imgSrc}
-        isModelLoaded={isModelLoaded}
-        openImageRef={openImageRef}
-        onOpenImageClick={handle_OpenImage}
-        onToggleCamera={handle_ToggleCamera}
-        onAddModel={handle_AddModel}
+        fileVideoRef={fileVideoRef}
+        fileImageRef={fileImageRef}
+        handle_OpenVideo={handle_OpenVideo}
+        handle_OpenImage={handle_OpenImage}
+        handle_ToggleCamera={handle_ToggleCamera}
+        handle_AddModel={handle_AddModel}
+        activeFeature={activeFeature}
       />
 
       <ModelStatus

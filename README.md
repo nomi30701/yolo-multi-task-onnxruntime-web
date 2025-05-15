@@ -1,7 +1,7 @@
 # 🚀 YOLO Multi-Task Web App
 
 <div align="center">
-<img src="https://github.com/nomi30701/yolo-multi-task-onnxruntime-web/blob/main/preview.png" width="80%" alt="YOLO Multi-Task Preview">
+<img src="https://github.com/nomi30701/yolo-multi-task-onnxruntime-web/blob/main/preview.jpg" width="80%" alt="YOLO Multi-Task Preview">
 </div>
 
 ## ✨ Features

@@ -1,44 +1,30 @@
 import * as ort from "onnxruntime-web/webgpu";
-import {
-  preProcess_dynamic,
-  preProcess,
-  applyNMS,
-  Colors,
-} from "./img_preprocess";
+import cv from "@techstark/opencv-js";
+import { preProcess_img, applyNMS, Colors } from "./img_preprocess";
 
-export const inference_pipeline = async (
-  input_el,
+/**
+ * Inference pipeline for YOLO model.
+ * @param {cv.Mat} src_mat - Input image Mat.
+ * @param {ort.InferenceSession} session - YOLO model session.
+ * @param {[Number, Number]} overlay_size - Overlay width and height. [width, height]
+ * @param {object} model_config - Model configuration object.
+ * @returns {[Array[Object], Number]} - Array of predictions and inference time.
+ */
+export async function inference_pipeline(
+  src_mat,
   session,
-  config,
-  overlay_el
-) => {
-  let input_tensor = null;
-  let output0 = null;
-  let output1 = null;
-
+  overlay_size,
+  model_config
+) {
+  // Pre-process img, inference
+  let input_tensor, output0, output1;
   try {
-    const src_mat = cv.imread(input_el);
-
-    // const [src_mat_preProcessed, xRatio, yRatio] = await preProcess(
-    //   src_mat,
-    //   sessionsConfig.input_shape[2],
-    //   sessionsConfig.input_shape[3]
-    // );
-
-    const [src_mat_preProcessed, div_width, div_height] =
-      preProcess_dynamic(src_mat);
-    const xRatio = src_mat.cols / div_width;
-    const yRatio = src_mat.rows / div_height;
-
+    const [input_tensor, xRatio, yRatio] = preProcess_img(
+      src_mat,
+      overlay_size,
+      model_config.imgsz_type
+    );
     src_mat.delete();
-
-    input_tensor = new ort.Tensor("float32", src_mat_preProcessed.data32F, [
-      1,
-      3,
-      div_height,
-      div_width,
-    ]);
-    src_mat_preProcessed.delete();
 
     const start = performance.now();
     const outputs = await session.run({
@@ -49,27 +35,38 @@ export const inference_pipeline = async (
     output0 = outputs.output0;
     output1 = outputs.output1;
 
-    // post process
-    let results;
-    let masksData;
-    switch (config.task) {
+    // Post process
+    let results, masksData, mask_imgData;
+    switch (model_config.task) {
       case "detect":
-        results = post_process_detect(output0, config, xRatio, yRatio);
+        results = postProcess_detect(
+          output0,
+          model_config.iou_threshold,
+          xRatio,
+          yRatio
+        );
         break;
       case "pose":
-        results = post_process_pose(output0, config, xRatio, yRatio);
+        results = postProcess_pose(
+          output0,
+          model_config.iou_threshold,
+          xRatio,
+          yRatio
+        );
         break;
       case "segment":
-        [results, masksData] = post_process_segment(
+        [results, masksData] = postProcess_segment(
           output0,
           output1,
-          config,
+          model_config.iou_threshold,
           xRatio,
           yRatio
         );
         break;
       default:
-        console.warn(`Unknown task: ${config.task}, falling back to detection`);
+        console.warn(
+          `Unknown task: ${model_config.task}, falling back to detection`
+        );
     }
     output0.dispose();
 
@@ -77,15 +74,22 @@ export const inference_pipeline = async (
     const selected_indices = applyNMS(
       results,
       results.map((r) => r.score),
-      config.iou_threshold
+      model_config.iou_threshold
     );
     const filtered_results = selected_indices.map((i) => results[i]);
 
-    if (config.task === "segment" && filtered_results.length > 0) {
-      renderSegmentationMasks(filtered_results, masksData, overlay_el);
+    if (model_config.task === "segment") {
+      mask_imgData = postProcess_mask(
+        filtered_results,
+        masksData,
+        overlay_size
+      );
     }
 
-    return [filtered_results, (end - start).toFixed(2)];
+    return [
+      { bbox_results: filtered_results, mask_imgData },
+      (end - start).toFixed(2),
+    ];
   } catch (error) {
     console.error("Inference error:", error);
     return [[], "0.00"];
@@ -94,9 +98,22 @@ export const inference_pipeline = async (
     if (output0) output0.dispose();
     if (output1) output1.dispose();
   }
-};
+}
 
-function post_process_detect(raw_tensor, config, xRatio, yRatio) {
+/**
+ *
+ * @param {*} raw_tensor - yolo model output0
+ * @param {*} score_threshold - score threshold
+ * @param {*} xRatio - xRatio
+ * @param {*} yRatio - yRatio
+ * @returns - object detection results
+ */
+function postProcess_detect(
+  raw_tensor,
+  score_threshold = 0.45,
+  xRatio,
+  yRatio
+) {
   const NUM_PREDICTIONS = raw_tensor.dims[2];
   const NUM_BBOX_ATTRS = 4;
   const NUM_SCORES = 80;
@@ -105,7 +122,7 @@ function post_process_detect(raw_tensor, config, xRatio, yRatio) {
   const bbox_data = predictions.subarray(0, NUM_PREDICTIONS * NUM_BBOX_ATTRS);
   const scores_data = predictions.subarray(NUM_PREDICTIONS * NUM_BBOX_ATTRS);
 
-  const results = new Array(Math.min(50, NUM_PREDICTIONS));
+  const results = new Array();
   let resultCount = 0;
 
   for (let i = 0; i < NUM_PREDICTIONS; i++) {
@@ -119,23 +136,31 @@ function post_process_detect(raw_tensor, config, xRatio, yRatio) {
         class_idx = c;
       }
     }
-    if (maxScore <= config.score_threshold) continue;
+    if (maxScore <= score_threshold) continue;
 
     const w = bbox_data[i + NUM_PREDICTIONS * 2] * xRatio;
     const h = bbox_data[i + NUM_PREDICTIONS * 3] * yRatio;
-    const x = bbox_data[i] * xRatio - 0.5 * w;
-    const y = bbox_data[i + NUM_PREDICTIONS] * yRatio - 0.5 * h;
+    const tlx = bbox_data[i] * xRatio - 0.5 * w;
+    const tly = bbox_data[i + NUM_PREDICTIONS] * yRatio - 0.5 * h;
 
     results[resultCount++] = {
-      bbox: [x, y, w, h],
+      bbox: [tlx, tly, w, h],
       class_idx,
       score: maxScore,
     };
   }
-  return resultCount < results.length ? results.slice(0, resultCount) : results;
+  return results;
 }
 
-function post_process_pose(raw_tensor, config, xRatio, yRatio) {
+/**
+ *
+ * @param {*} raw_tensor - yolo model output0
+ * @param {*} score_threshold - score threshold
+ * @param {*} xRatio - xRatio
+ * @param {*} yRatio - yRatio
+ * @returns - pose estimation results
+ */
+function postProcess_pose(raw_tensor, score_threshold = 0.45, xRatio, yRatio) {
   // post process
   const NUM_PREDICTIONS = raw_tensor.dims[2];
   const NUM_BBOX_ATTRS = 5;
@@ -146,17 +171,17 @@ function post_process_pose(raw_tensor, config, xRatio, yRatio) {
   const bbox_data = predictions.subarray(0, NUM_PREDICTIONS * NUM_BBOX_ATTRS);
   const keypoints_data = predictions.subarray(NUM_PREDICTIONS * NUM_BBOX_ATTRS);
 
-  const results = new Array(Math.min(50, NUM_PREDICTIONS));
+  const results = new Array();
   let resultCount = 0;
 
   for (let i = 0; i < NUM_PREDICTIONS; i++) {
     const score = bbox_data[i + NUM_PREDICTIONS * 4];
-    if (score <= config.score_threshold) continue;
+    if (score <= score_threshold) continue;
 
     const w = bbox_data[i + NUM_PREDICTIONS * 2] * xRatio;
     const h = bbox_data[i + NUM_PREDICTIONS * 3] * yRatio;
-    const x = bbox_data[i] * xRatio - 0.5 * w;
-    const y = bbox_data[i + NUM_PREDICTIONS] * yRatio - 0.5 * h;
+    const tlx = bbox_data[i] * xRatio - 0.5 * w;
+    const tly = bbox_data[i + NUM_PREDICTIONS] * yRatio - 0.5 * h;
 
     const keypoints = new Array(NUM_KEYPOINTS);
     for (let kp = 0; kp < NUM_KEYPOINTS; kp++) {
@@ -169,15 +194,30 @@ function post_process_pose(raw_tensor, config, xRatio, yRatio) {
     }
 
     results[resultCount++] = {
-      bbox: [x, y, w, h],
+      bbox: [tlx, tly, w, h],
       score,
       keypoints,
     };
   }
-  return resultCount < results.length ? results.slice(0, resultCount) : results;
+  return results;
 }
 
-function post_process_segment(output0, output1, config, xRatio, yRatio) {
+/**
+ *
+ * @param {*} output0 - yolo model output0
+ * @param {*} output1 - yolo model output1
+ * @param {*} score_threshold - score threshold
+ * @param {*} xRatio - xRatio
+ * @param {*} yRatio - yRatio
+ * @returns
+ */
+function postProcess_segment(
+  output0,
+  output1,
+  score_threshold,
+  xRatio,
+  yRatio
+) {
   const NUM_PREDICTIONS = output0.dims[2];
   const NUM_BBOX_ATTRS = 4;
   const NUM_SCORES = 80;
@@ -198,7 +238,7 @@ function post_process_segment(output0, output1, config, xRatio, yRatio) {
   const MASK_HEIGHT = output1.dims[2];
   const MASK_WIDTH = output1.dims[3];
 
-  const results = new Array(Math.min(50, NUM_PREDICTIONS));
+  const results = new Array();
   let resultCount = 0;
   for (let i = 0; i < NUM_PREDICTIONS; i++) {
     let maxScore = 0;
@@ -211,7 +251,7 @@ function post_process_segment(output0, output1, config, xRatio, yRatio) {
         class_idx = c;
       }
     }
-    if (maxScore <= config.score_threshold) continue;
+    if (maxScore <= score_threshold) continue;
 
     const w = bbox_data[i + NUM_PREDICTIONS * 2] * xRatio;
     const h = bbox_data[i + NUM_PREDICTIONS * 3] * yRatio;
@@ -238,13 +278,18 @@ function post_process_segment(output0, output1, config, xRatio, yRatio) {
     MASK_WIDTH,
   };
 
-  const finalResults =
-    resultCount < results.length ? results.slice(0, resultCount) : results;
-
-  return [finalResults, masksData];
+  return [results, masksData];
 }
 
-function renderSegmentationMasks(filtered_results, masksData, overlay_el) {
+/**
+ *
+ * @param {*} filtered_results - NMS filtered results
+ * @param {*} masksData - output1 data (mask weights)
+ * @param {*} overlay_size - Size of the overlay. [width, height]
+ * @returns {ImageData} - ImageData object for the overlay
+ */
+function postProcess_mask(filtered_results, masksData, overlay_size) {
+  if (!filtered_results || filtered_results.length === 0) return null;
   const { proto_mask, MASK_CHANNELS, MASK_HEIGHT, MASK_WIDTH } = masksData;
 
   const proto_mask_mat = cv.matFromArray(
@@ -302,8 +347,8 @@ function renderSegmentationMasks(filtered_results, masksData, overlay_el) {
     weights_mul_proto_mat.delete();
 
     const overlay_mat = new cv.Mat(
-      overlay_el.height,
-      overlay_el.width,
+      overlay_size[1],
+      overlay_size[0],
       cv.CV_8UC4,
       new cv.Scalar(0, 0, 0, 0)
     );
@@ -321,7 +366,7 @@ function renderSegmentationMasks(filtered_results, masksData, overlay_el) {
       cv.resize(
         mask_mat,
         mask_resized_mat,
-        new cv.Size(overlay_el.width, overlay_el.height),
+        new cv.Size(overlay_size[0], overlay_size[1]),
         cv.INTER_LINEAR
       );
 
@@ -333,8 +378,8 @@ function renderSegmentationMasks(filtered_results, masksData, overlay_el) {
       const [x, y, w, h] = filtered_results[i].bbox;
       const x1 = Math.max(0, x);
       const y1 = Math.max(0, y);
-      const x2 = Math.min(overlay_el.width, x + w);
-      const y2 = Math.min(overlay_el.height, y + h);
+      const x2 = Math.min(overlay_size[0], x + w);
+      const y2 = Math.min(overlay_size[1], y + h);
 
       const roi = mask_binary_u8_mat.roi(new cv.Rect(x1, y1, x2 - x1, y2 - y1));
       const color = Colors.getColor(filtered_results[i].class_idx, 0.6);
@@ -367,16 +412,14 @@ function renderSegmentationMasks(filtered_results, masksData, overlay_el) {
 
     const imgData = new ImageData(
       new Uint8ClampedArray(overlay_mat.data),
-      overlay_el.width,
-      overlay_el.height
+      overlay_size[0],
+      overlay_size[1]
     );
-    const ctx = overlay_el.getContext("2d");
-    ctx.clearRect(0, 0, overlay_el.width, overlay_el.height);
-    ctx.putImageData(imgData, 0, 0);
-
     overlay_mat.delete();
+
+    return imgData;
   } catch (error) {
-    console.error("Error rendering masks:", error);
+    console.error("Error masks:", error);
     proto_mask_mat.delete();
   }
 }

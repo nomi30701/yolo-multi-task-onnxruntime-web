@@ -12,13 +12,17 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.0.9",
+    "@tailwindcss/vite": "^4.1.6",
+    "@techstark/opencv-js": "^4.10.0-release.1",
     "gh-pages": "^6.3.0",
-    "onnxruntime-web": "^1.20.1",
+    "mathjs": "^14.4.0",
+    "mp4-muxer": "^5.2.1",
+    "mp4box": "^0.5.4",
+    "munkres-algorithm": "^1.0.2",
+    "onnxruntime-web": "^1.22.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwindcss": "^4.0.9",
-    "vite-plugin-static-copy": "^2.3.0"
+    "tailwindcss": "^4.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
