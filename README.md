@@ -25,87 +25,113 @@ This web application built on ONNX Runtime Web implements YOLO's multi-task infe
 | [YOLO11-S](https://github.com/ultralytics/ultralytics) |    640     |  9.4M  | 🖥️ Higher accuracy requirements |
 
 ## 🛠️ Installation Guide
+
+1. Clone this repository
 ```bash
-# Clone repo
-git clone https://github.com/nomi30701/yolo-multi-class-onnxruntime-web.git
-
-# Navigate to the project directory
-cd yolo-multi-class-onnxruntime-web
-
-# Install dependencies
-yarn install 
+git clone https://github.com/nomi30701/yolo-multi-task-onnxruntime-web.git
 ```
-## 🚀 Running the Project
-```bash
-# Start development server
-yarn dev
 
-# Build the project
+2. cd to the project directory
+```bash
+cd YOLO-ByteTrack-ONNX-Web
+```
+
+3. Install dependencies
+```bash
+yarn install
+```
+
+## 🚀 Running the Project
+
+Start development server
+```bash
+yarn dev
+```
+
+Build the project
+```bash
 yarn build
 ```
 
 ## 🔧 Using Custom YOLO Models
-### Step 1: Convert model to ONNX format
-Read more on [Ultralytics](https://docs.ultralytics.com/).
-  ```Python
-  from ultralytics import YOLO
 
-  # Load a model
-  model = YOLO("yolo11n-pose.pt")
+To use a custom YOLO model, follow these steps:
 
-  # Export the model
-  # Important: Use opset=12 to ensure WebGPU compatibility
-  model.export(format="onnx", opset=12, dynamic=True)  
-  ```
+### Step 1: Convert your model to ONNX format
 
-### Step 2: Add to the project
-Choose one of the following methods:
-  - 📁 Copy model to the `./public/models/` directory
-  - 🔄 Upload directly through the **Add model** button in the web interface
+Use Ultralytics or your preferred method to export your YOLO model to ONNX format. Ensure to use `opset=12` for WebGPU compatibility.
 
-### Step 3: Register model in App.jsx
-  ```HTML
-  <select name="model-selector" ref={modelRef} onChange={onModelChange}>
-  {/* Add your model here */}
-  <option value="YOUR_MODEL_NAME">Your Custom Model</option>
-  <option value="yolo11n">yolo11n-2.6M</option>
-  <option value="yolo11s">yolo11s-9.4M</option>
-  </select>
-  ```
+```python
+from ultralytics import YOLO
+
+# Load your model
+model = YOLO("path/to/your/model.pt")
+
+# Export to ONNX
+model.export(format="onnx", opset=12, dynamic=True)
+```
+
+### Step 2: Add the model to the project
+
+You can either:
+
+- 📁 Copy your ONNX model file to the `./public/models/` directory
+- 🔄 Upload your model directly through the `**Add model**` button in the web interface 
+
+#### 📁 Copy your ONNX model file to the `./public/models/` directory
+
+In App.jsx
+
+```jsx
+<label htmlFor="model-selector">Model:</label>
+<select name="model-selector">
+  <option value="yolo12n">yolo11n-2.6M</option>
+  <option value="yolo12s">yolo11s-9.4M</option>
+  <option value="your-custom-model-name">Your Custom Model</option>
+</select>
+```
+
+Replace `"your-custom-model-name"` with the filename of your ONNX model.
+
+### Step 3: Update class definitions
+
+Update the `src/utils/yolo_classes.json` file with the class names that your custom model uses. This file should contain a dict of strings representing the class labels.
+
+For example:
+
+```json
+{"class": 
+  {"0": "person", 
+   "1": "bicycle",
+   "2": "car",
+   "3": "motorcycle",
+   "4": "airplane"
+  }
+}
+```
+
+Make sure the classes match exactly with those used during training of your custom model.
 
 ### Step 4: Refresh and select your new model 🎉
-
-## 💡 Advanced Configuration Tips
-> 📏 **Dynamic Input Size**
-> Dynamic input size support is enabled by default. For fixed size, modify `/utils/inference_pipeline.js`:
-> 1. Uncomment this code:
-> ```Javascript
-> const [src_mat_preProcessed, xRatio, yRatio] = await preProcess(
->   src_mat,
->   sessionsConfig.input_shape[2],
->   sessionsConfig.input_shape[3]
-> );
-> ```
-> 
-> 2. Remove the dynamic sizing code:
-> ```Javascript
-> const [src_mat_preProcessed, div_width, div_height] = preProcess_dynamic(src_mat);
-> const xRatio = src_mat.cols / div_width;
-> const yRatio = src_mat.rows / div_height;
-> ```
->
-> 3. Change Tensor size
-> ```Javascript
-> const input_tensor = new ort.Tensor("float32", src_mat_preProcessed.data32F, [
->   1,
->   3,
->   config.input_shape[2],
->   config.input_shape[3],
-> ]);
->
-
 
 > 🚀 WebGPU Support
 >
 > Ensure you set `opset=12` when exporting ONNX models, as this is required for WebGPU compatibility.
 
+## 📸 Image Processing Options
+
+The web application provides two options for handling input image sizes, controlled by the `imgsz_type` setting:
+
+- **Dynamic:**
+  - When selected, the input image is used at its original size without resizing.
+  - Inference time may vary depending on the image resolution; larger images take longer to process.
+
+- **Zero Pad:**
+  - When selected, the input image is first padded with zero pixels to make it square (by adding padding to the right and bottom).
+  - The padded image is then resized to 640x640 pixels.
+  - This option provides a balance between accuracy and inference time, as it avoids extreme scaling while maintaining a predictable processing speed.
+  - Use this option for real-time applications.
+
+> ✨ Dynamic input
+>
+> This requires that the YOLO model was exported with `dynamic=True` to support variable input sizes.
