@@ -1,6 +1,7 @@
 import "./assets/App.css";
 import { useEffect, useRef, useState, useCallback } from "react";
 import cv from "@techstark/opencv-js";
+import { model_loader } from "./utils/model_loader";
 import { inference_pipeline } from "./utils/inference_pipeline";
 import { draw_bounding_boxes } from "./utils/draw_bounding_boxes";
 import classes from "./utils/yolo_classes.json";
@@ -594,6 +595,8 @@ function App() {
 
   // Init page
   useEffect(() => {
+    loadModel();
+
     // Worker setup
     const videoWorker = new Worker(
       new URL("./utils/video_process_worker.js", import.meta.url),
@@ -602,16 +605,6 @@ function App() {
 
     videoWorker.onmessage = videoWorkerMessage;
     videoWorkerRef.current = videoWorker;
-
-    const modelLoaderWorker = new Worker(
-      new URL("./utils/model_loader_worker.js", import.meta.url),
-      { type: "module" }
-    );
-
-    modelLoaderWorker.onmessage = modelLoaderWorkerMessage;
-    modelLoaderWorkerRef.current = modelLoaderWorker;
-
-    loadModel();
   }, []);
 
   const videoWorkerMessage = useCallback((e) => {
@@ -628,22 +621,6 @@ function App() {
       URL.revokeObjectURL(url);
       setActiveFeature(null);
     }
-  }, []);
-
-  const modelLoaderWorkerMessage = useCallback((e) => {
-    const { yolo_model, eps, statusMsg, color } = e.data;
-
-    if (yolo_model) {
-      sessionRef.current = yolo_model;
-      const cacheKey = `${modelConfigRef.current.model}-${modelConfigRef.current.task}-${modelConfigRef.current.backend}`;
-      modelCache.current[cacheKey] = yolo_model;
-    }
-    setModelState((prev) => ({
-      ...prev,
-      statusMsg,
-      statusColor: color,
-      warnUpTime: eps ? eps.toFixed(2) : prev.warnUpTime,
-    }));
   }, []);
 
   const loadModel = useCallback(async () => {
@@ -678,14 +655,31 @@ function App() {
       return;
     }
 
-    // Call worker to load model
-    modelLoaderWorkerRef.current.postMessage({
-      model_path,
-      backend: modelConfig.backend,
-      input_shape: modelConfig.input_shape,
-    });
+    try {
+      // Load model
+      const start = performance.now();
+      const yolo_model = await model_loader(model_path, modelConfig.backend);
+      const end = performance.now();
 
-    setActiveFeature(null);
+      sessionRef.current = yolo_model;
+      modelCache.current[cacheKey] = yolo_model;
+
+      setModelState((prev) => ({
+        ...prev,
+        statusMsg: "Model loaded",
+        statusColor: "green",
+        warnUpTime: (end - start).toFixed(2),
+      }));
+    } catch (error) {
+      setModelState((prev) => ({
+        ...prev,
+        statusMsg: "Model loading failed",
+        statusColor: "red",
+      }));
+      console.error(error);
+    } finally {
+      setActiveFeature(null);
+    }
   }, [customModels]);
 
   const handle_AddModel = useCallback((event) => {
