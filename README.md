@@ -1,7 +1,7 @@
 # 🚀 YOLO Multi-Task Web App
 
 <div align="center">
-<img src="./preview.jpg" width="80%" alt="YOLO Multi-Task Preview">
+<img src="./preview.png" width="80%" alt="YOLO Multi-Task Preview">
 </div>
 
 ## ✨ Features
