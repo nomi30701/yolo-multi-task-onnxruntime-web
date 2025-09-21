@@ -170,7 +170,7 @@ function ImageDisplay({
         </div>
       )}
       <video
-        className="block w-full max-w-full max-h-[400px] sm:max-h-[640px] rounded-lg mx-auto object-contain"
+        className="block max-h-[400px] sm:max-h-[640px] rounded-lg mx-auto object-contain"
         ref={cameraRef}
         onLoadedMetadata={onCameraLoad}
         hidden={activeFeature !== "camera"}
@@ -183,13 +183,13 @@ function ImageDisplay({
         src={imgSrc}
         onLoad={onImageLoad}
         hidden={activeFeature !== "image"}
-        className="block w-full max-w-full max-h-[400px] sm:max-h-[640px] rounded-lg mx-auto object-contain"
+        className="block max-h-[400px] sm:max-h-[640px] rounded-lg mx-auto object-contain"
         alt="Uploaded"
       />
       <canvas
         ref={overlayRef}
         hidden={activeFeature === null}
-        className="absolute top-0 left-0 right-0 w-full h-full pointer-events-none"
+        className="absolute"
       ></canvas>
     </div>
   );
