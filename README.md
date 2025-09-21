@@ -1,7 +1,7 @@
 # 🚀 YOLO Multi-Task Web App
 
 <div align="center">
-<img src="https://github.com/nomi30701/yolo-multi-task-onnxruntime-web/blob/main/preview.jpg" width="80%" alt="YOLO Multi-Task Preview">
+<img src="./preview.jpg" width="80%" alt="YOLO Multi-Task Preview">
 </div>
 
 ## ✨ Features
@@ -33,7 +33,7 @@ git clone https://github.com/nomi30701/yolo-multi-task-onnxruntime-web.git
 
 2. cd to the project directory
 ```bash
-cd YOLO-ByteTrack-ONNX-Web
+cd yolo-multi-task-onnxruntime-web
 ```
 
 3. Install dependencies
