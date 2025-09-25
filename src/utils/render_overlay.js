@@ -7,7 +7,7 @@ import { Colors } from "./img_preprocess.js";
  * @param {string} task - Task type: "detect", "pose", or "segment"
  * @param {HTMLCanvasElement} overlay_ctx - Show boxes in overlay canvas element
  */
-export async function draw_bounding_boxes(predictions, task, overlay_ctx) {
+export async function render_overlay(predictions, task, overlay_ctx) {
   // Calculate diagonal length of the canvas
   const diagonalLength = Math.sqrt(
     Math.pow(overlay_ctx.canvas.width, 2) +
@@ -112,22 +112,22 @@ function draw_pose_estimation(ctx, predictions, lineWidth) {
     [15, 13],
     [13, 11],
     [16, 14],
-    [14, 12], // leg
-    [11, 12], // butts
+    [14, 12],
+    [11, 12],
     [5, 11],
-    [6, 12], // body
-    [5, 6], // shoulder
+    [6, 12],
+    [5, 6],
     [5, 7],
     [6, 8],
     [7, 9],
-    [8, 10], // arms
+    [8, 10],
     [1, 2],
     [0, 1],
     [0, 2],
     [1, 3],
-    [2, 4], // face
+    [2, 4],
     [3, 5],
-    [4, 6], // ear to shoulder
+    [4, 6],
   ];
 
   // connect all keypoints

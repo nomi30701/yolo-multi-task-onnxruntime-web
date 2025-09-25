@@ -47,9 +47,6 @@ const preProcess_img = (src_mat, size, imgsz_type) => {
  * @returns {[cv.Mat, Number, Number]} Processed input mat, xRatio, yRatio.
  */
 const img_zeroPad = (mat, model_size, output_size) => {
-  const original_width = mat.cols;
-  const original_height = mat.rows;
-
   cv.cvtColor(mat, mat, cv.COLOR_RGBA2RGB);
 
   // Resize to dimensions divisible by 32

@@ -1,9 +1,8 @@
 import "./assets/App.css";
 import { useEffect, useRef, useState, useCallback } from "react";
-import cv from "@techstark/opencv-js";
 import { model_loader } from "./utils/model_loader";
 import { inference_pipeline } from "./utils/inference_pipeline";
-import { draw_bounding_boxes } from "./utils/draw_bounding_boxes";
+import { render_overlay } from "./utils/render_overlay";
 import classes from "./utils/yolo_classes.json";
 
 const MODEL_CONFIG = {
@@ -392,7 +391,6 @@ function ControlButtons({
   );
 }
 
-// model status Components
 function ModelStatus({ warnUpTime, inferenceTime, statusMsg, statusColor }) {
   return (
     <div className="container bg-gray-800 rounded-xl shadow-lg p-3 sm:p-4 mb-4 sm:mb-6">
@@ -455,8 +453,6 @@ function ModelStatus({ warnUpTime, inferenceTime, statusMsg, statusColor }) {
     </div>
   );
 }
-
-// ...existing code...
 
 function ResultsTable({ details }) {
   return (
@@ -557,13 +553,13 @@ function ResultsTable({ details }) {
 }
 
 function App() {
-  const [modelState, setModelState] = useState({
+  const [processingStatus, setProcessingStatus] = useState({
     warnUpTime: 0,
     inferenceTime: 0,
     statusMsg: "Model not loaded",
     statusColor: "inherit",
   });
-  const { warnUpTime, inferenceTime, statusMsg, statusColor } = modelState;
+
   const modelConfigRef = useRef(MODEL_CONFIG);
 
   // resource reference
@@ -589,9 +585,8 @@ function App() {
   const [details, setDetails] = useState([]);
   const [activeFeature, setActiveFeature] = useState(null); // null, 'video', 'image', 'camera'
 
-  // worker
+  // Worker
   const videoWorkerRef = useRef(null);
-  const modelLoaderWorkerRef = useRef(null);
 
   // Init page
   useEffect(() => {
@@ -608,7 +603,7 @@ function App() {
   }, []);
 
   const videoWorkerMessage = useCallback((e) => {
-    setModelState((prev) => ({
+    setProcessingStatus((prev) => ({
       ...prev,
       statusMsg: e.data.statusMsg,
     }));
@@ -625,7 +620,7 @@ function App() {
 
   const loadModel = useCallback(async () => {
     // Update model state
-    setModelState((prev) => ({
+    setProcessingStatus((prev) => ({
       ...prev,
       statusMsg: "Loading model...",
       statusColor: "red",
@@ -646,7 +641,7 @@ function App() {
     const cacheKey = `${modelConfig.model}-${modelConfig.task}-${modelConfig.backend}`;
     if (modelCache.current[cacheKey]) {
       sessionRef.current = modelCache.current[cacheKey];
-      setModelState((prev) => ({
+      setProcessingStatus((prev) => ({
         ...prev,
         statusMsg: "Model loaded from cache",
         statusColor: "green",
@@ -664,14 +659,14 @@ function App() {
       sessionRef.current = yolo_model;
       modelCache.current[cacheKey] = yolo_model;
 
-      setModelState((prev) => ({
+      setProcessingStatus((prev) => ({
         ...prev,
         statusMsg: "Model loaded",
         statusColor: "green",
         warnUpTime: (end - start).toFixed(2),
       }));
     } catch (error) {
-      setModelState((prev) => ({
+      setProcessingStatus((prev) => ({
         ...prev,
         statusMsg: "Model loading failed",
         statusColor: "red",
@@ -682,6 +677,7 @@ function App() {
     }
   }, [customModels]);
 
+  // Button add model
   const handle_AddModel = useCallback((event) => {
     const file = event.target.files[0];
     if (file) {
@@ -694,6 +690,7 @@ function App() {
     }
   }, []);
 
+  // Button Upload Image
   const handle_OpenImage = useCallback(
     (imgUrl = null) => {
       if (imgUrl) {
@@ -713,18 +710,21 @@ function App() {
     [imgSrc]
   );
 
+  // If image loaded, run inference
   const handle_ImageLoad = useCallback(async () => {
+    // overlay size = image size
     overlayRef.current.width = imgRef.current.width;
     overlayRef.current.height = imgRef.current.height;
 
+    // inference
     try {
-      const src_mat = cv.imread(imgRef.current);
       const [results, results_inferenceTime] = await inference_pipeline(
-        src_mat,
+        imgRef.current,
         sessionRef.current,
         [overlayRef.current.width, overlayRef.current.height],
         modelConfigRef.current
       );
+      // draw results on overlay
       const overlayCtx = overlayRef.current.getContext("2d");
       overlayCtx.clearRect(
         0,
@@ -732,10 +732,10 @@ function App() {
         overlayCtx.canvas.width,
         overlayCtx.canvas.height
       );
+      await render_overlay(results, modelConfigRef.current.task, overlayCtx);
 
-      draw_bounding_boxes(results, modelConfigRef.current.task, overlayCtx);
       setDetails(results.bbox_results);
-      setModelState((prev) => ({
+      setProcessingStatus((prev) => ({
         ...prev,
         inferenceTime: results_inferenceTime,
       }));
@@ -744,6 +744,7 @@ function App() {
     }
   }, [sessionRef.current]);
 
+  // Get camera list
   const getCameras = useCallback(async () => {
     try {
       // get camera list
@@ -785,6 +786,7 @@ function App() {
     }
   }, []);
 
+  // Button toggle camera
   const handle_ToggleCamera = useCallback(async () => {
     if (cameraRef.current.srcObject) {
       // close camera
@@ -798,7 +800,7 @@ function App() {
     } else {
       // open camera
       try {
-        setModelState((prev) => ({
+        setProcessingStatus((prev) => ({
           ...prev,
           statusMsg: "Getting camera list...",
           statusColor: "blue",
@@ -808,7 +810,7 @@ function App() {
           throw new Error("No available camera devices found");
         }
 
-        setModelState((prev) => ({
+        setProcessingStatus((prev) => ({
           ...prev,
           statusMsg: "Opening camera...",
           statusColor: "blue",
@@ -828,7 +830,7 @@ function App() {
 
           cameraRef.current.srcObject = stream;
           setActiveFeature("camera");
-          setModelState((prev) => ({
+          setProcessingStatus((prev) => ({
             ...prev,
             statusMsg: "Camera opened successfully",
             statusColor: "green",
@@ -836,7 +838,7 @@ function App() {
         } catch (streamErr) {
           console.error("Failed to open selected camera:", streamErr);
 
-          setModelState((prev) => ({
+          setProcessingStatus((prev) => ({
             ...prev,
             statusMsg: "Trying to open any available camera...",
             statusColor: "blue",
@@ -849,7 +851,7 @@ function App() {
 
           cameraRef.current.srcObject = fallbackStream;
           setActiveFeature("camera");
-          setModelState((prev) => ({
+          setProcessingStatus((prev) => ({
             ...prev,
             statusMsg: "Default camera opened (selected camera unavailable)",
             statusColor: "green",
@@ -857,7 +859,7 @@ function App() {
         }
       } catch (err) {
         console.error("Error in camera toggle process:", err);
-        setModelState((prev) => ({
+        setProcessingStatus((prev) => ({
           ...prev,
           statusMsg: `Camera opened failed: ${err.message}`,
           statusColor: "red",
@@ -866,6 +868,7 @@ function App() {
     }
   }, [getCameras]);
 
+  // If camera loaded, run inference continuously
   const handle_cameraLoad = useCallback(() => {
     overlayRef.current.width = cameraRef.current.clientWidth;
     overlayRef.current.height = cameraRef.current.clientHeight;
@@ -879,26 +882,29 @@ function App() {
       willReadFrequently: true,
     });
 
+    // inference loop
     const handle_frame_continuous = async () => {
       if (!cameraRef.current?.srcObject) {
         inputCanvas = null;
         ctx = null;
         return;
       }
+      // draw camera frame to input canvas
       ctx.drawImage(
         cameraRef.current,
         0,
         0,
         cameraRef.current.videoWidth,
         cameraRef.current.videoHeight
-      ); // draw camera frame to input canvas
-      const src_mat = cv.imread(inputCanvas);
+      );
+      // Inference
       const [results, results_inferenceTime] = await inference_pipeline(
-        src_mat,
+        inputCanvas,
         sessionRef.current,
         [overlayRef.current.width, overlayRef.current.height],
         modelConfigRef.current
       );
+      // draw results on overlay
       const overlayCtx = overlayRef.current.getContext("2d");
       overlayCtx.clearRect(
         0,
@@ -906,10 +912,10 @@ function App() {
         overlayCtx.canvas.width,
         overlayCtx.canvas.height
       );
-      draw_bounding_boxes(results, modelConfigRef.current.task, overlayCtx);
+      render_overlay(results, modelConfigRef.current.task, overlayCtx);
 
       setDetails(results.bbox_results);
-      setModelState((prev) => ({
+      setProcessingStatus((prev) => ({
         ...prev,
         inferenceTime: results_inferenceTime,
       }));
@@ -919,6 +925,7 @@ function App() {
     requestAnimationFrame(handle_frame_continuous);
   }, [sessionRef.current]);
 
+  // Button Upload Video
   const handle_OpenVideo = useCallback((file) => {
     if (file) {
       videoWorkerRef.current.postMessage(
@@ -979,10 +986,10 @@ function App() {
       />
 
       <ModelStatus
-        warnUpTime={warnUpTime}
-        inferenceTime={inferenceTime}
-        statusMsg={statusMsg}
-        statusColor={statusColor}
+        warnUpTime={processingStatus.warnUpTime}
+        inferenceTime={processingStatus.inferenceTime}
+        statusMsg={processingStatus.statusMsg}
+        statusColor={processingStatus.statusColor}
       />
 
       <ResultsTable details={details} />
