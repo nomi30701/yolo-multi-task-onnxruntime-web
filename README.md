@@ -16,8 +16,18 @@ This web application built on ONNX Runtime Web implements YOLO's multi-task infe
 
 - ⚡ **WebGPU Acceleration** - Leverage the latest Web graphics API for enhanced performance
 - 🧠 **WASM (CPU)** - Provide compatibility on devices that don't support WebGPU
-  
-  
+
+## 📹 Input Types Support
+
+The application supports multiple input types for object detection:
+
+| Input Type | Format | Description | Use Case |
+| :--------- | :----: | :---------- | :------- |
+| 📷 **Image** | JPG, PNG | Upload and analyze static images | 🔍 Single image analysis, batch processing |
+| 📹 **Video** | MP4 | Upload and process video files | 🎬 Offline video analysis, content review |
+| 📺 **Live Camera** | Real-time stream | Use device camera for live detection | 🚀 Real-time monitoring, interactive demos |
+
+
 ## 📊 Available Models
 | Model                                                  | Input Size | Param. | Best For |
 | :----------------------------------------------------- | :--------: | :----: | :------: |

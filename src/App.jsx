@@ -16,7 +16,7 @@ const MODEL_CONFIG = {
   imgsz_type: "dynamic",
 };
 
-// set Components
+// Settings Components
 function SettingsPanel({
   backendSelectorRef,
   modelSelectorRef,
@@ -203,6 +203,10 @@ function ControlButtons({
   handle_OpenImage,
   handle_ToggleCamera,
   handle_AddModel,
+  handle_AddClassesFile,
+  customClasses,
+  currentClasses,
+  setCurrentClasses,
   activeFeature,
 }) {
   return (
@@ -386,7 +390,69 @@ function ControlButtons({
           </svg>
           Add Model
         </button>
+
+        <button
+          className="btn-secondary flex items-center justify-center"
+          onClick={(e) => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".json";
+            input.onchange = handle_AddClassesFile;
+            input.click();
+          }}
+          disabled={activeFeature !== null}
+        >
+          <svg
+            className="w-5 h-5 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+            />
+          </svg>
+          Add Classes
+        </button>
       </div>
+
+      {customClasses.length > 0 && (
+        <div className="mt-3 sm:mt-4">
+          <div className="flex flex-col">
+            <label className="text-gray-300 mb-1 text-sm sm:text-base font-medium">
+              Class File:
+            </label>
+            <select
+              className="p-2 text-sm rounded-md bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500"
+              value={
+                currentClasses === classes
+                  ? "default"
+                  : customClasses.findIndex((c) => c.data === currentClasses)
+              }
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "default") {
+                  setCurrentClasses(classes);
+                } else {
+                  const index = parseInt(value);
+                  setCurrentClasses(customClasses[index].data);
+                }
+              }}
+            >
+              <option value="default">Default Classes</option>
+              {customClasses.map((classFile, index) => (
+                <option key={index} value={index}>
+                  {classFile.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -585,6 +651,10 @@ function App() {
   const [details, setDetails] = useState([]);
   const [activeFeature, setActiveFeature] = useState(null); // null, 'video', 'image', 'camera'
 
+  // custom classes
+  const [customClasses, setCustomClasses] = useState([]);
+  const [currentClasses, setCurrentClasses] = useState(classes);
+
   // Worker
   const videoWorkerRef = useRef(null);
 
@@ -690,6 +760,46 @@ function App() {
     }
   }, []);
 
+  // Button add classes file
+  const handle_AddClassesFile = useCallback((event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const jsonData = JSON.parse(e.target.result);
+          // Validate that the JSON has the expected format
+          if (
+            jsonData &&
+            jsonData.class &&
+            typeof jsonData.class === "object"
+          ) {
+            const fileName = file.name.replace(".json", "");
+            const newClassFile = { name: fileName, data: jsonData };
+            setCustomClasses((prevClasses) => [...prevClasses, newClassFile]);
+
+            // Automatically select the newly added classes
+            setCurrentClasses(jsonData);
+          } else {
+            setProcessingStatus((prev) => ({
+              ...prev,
+              statusMsg: "Invalid classes file format",
+              statusColor: "red",
+            }));
+          }
+        } catch (error) {
+          console.error("Error parsing JSON file:", error);
+          setProcessingStatus((prev) => ({
+            ...prev,
+            statusMsg: "Error parsing JSON file",
+            statusColor: "red",
+          }));
+        }
+      };
+      reader.readAsText(file);
+    }
+  }, []);
+
   // Button Upload Image
   const handle_OpenImage = useCallback(
     (imgUrl = null) => {
@@ -732,7 +842,12 @@ function App() {
         overlayCtx.canvas.width,
         overlayCtx.canvas.height
       );
-      await render_overlay(results, modelConfigRef.current.task, overlayCtx);
+      await render_overlay(
+        results,
+        modelConfigRef.current.task,
+        overlayCtx,
+        currentClasses
+      );
 
       setDetails(results.bbox_results);
       setProcessingStatus((prev) => ({
@@ -912,7 +1027,12 @@ function App() {
         overlayCtx.canvas.width,
         overlayCtx.canvas.height
       );
-      render_overlay(results, modelConfigRef.current.task, overlayCtx);
+      render_overlay(
+        results,
+        modelConfigRef.current.task,
+        overlayCtx,
+        currentClasses
+      );
 
       setDetails(results.bbox_results);
       setProcessingStatus((prev) => ({
@@ -972,9 +1092,7 @@ function App() {
         onImageLoad={handle_ImageLoad}
         activeFeature={activeFeature}
       />
-
       <ControlButtons
-        cameras={cameras}
         imgSrc={imgSrc}
         fileVideoRef={fileVideoRef}
         fileImageRef={fileImageRef}
@@ -982,6 +1100,10 @@ function App() {
         handle_OpenImage={handle_OpenImage}
         handle_ToggleCamera={handle_ToggleCamera}
         handle_AddModel={handle_AddModel}
+        handle_AddClassesFile={handle_AddClassesFile}
+        customClasses={customClasses}
+        currentClasses={currentClasses}
+        setCurrentClasses={setCurrentClasses}
         activeFeature={activeFeature}
       />
 
@@ -992,7 +1114,7 @@ function App() {
         statusColor={processingStatus.statusColor}
       />
 
-      <ResultsTable details={details} />
+      <ResultsTable details={details} currentClasses={currentClasses} />
     </div>
   );
 }

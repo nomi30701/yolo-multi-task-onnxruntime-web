@@ -1,5 +1,5 @@
 import cv from "@techstark/opencv-js";
-import * as ort from "onnxruntime-web/webgpu";
+import { Tensor } from "onnxruntime-web/webgpu";
 
 /**
  * Pre-process input image.
@@ -17,7 +17,7 @@ const preProcess_img = (src_mat, size, imgsz_type) => {
       src_mat,
       size
     );
-    input_tensor = new ort.Tensor(
+    input_tensor = new Tensor(
       "float32",
       preProcessed.data32F,
       [1, 3, div_height, div_width] // [batch, channel, height, width]
@@ -25,7 +25,7 @@ const preProcess_img = (src_mat, size, imgsz_type) => {
   } else if (imgsz_type === "zeroPad") {
     const model_size = [640, 640]; // yolo model default input size
     [preProcessed, xRatio, yRatio] = img_zeroPad(src_mat, model_size, size);
-    input_tensor = new ort.Tensor(
+    input_tensor = new Tensor(
       "float32",
       preProcessed.data32F,
       [1, 3, model_size[1], model_size[0]] // [batch, channel, height, width]

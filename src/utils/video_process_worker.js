@@ -1,5 +1,5 @@
 import cv from "@techstark/opencv-js";
-import * as ort from "onnxruntime-web/webgpu";
+import { InferenceSession } from "onnxruntime-web/webgpu";
 import { MP4Demuxer } from "./demuxer";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { inference_pipeline } from "./inference_pipeline";
@@ -9,7 +9,7 @@ self.onmessage = async function (e) {
   const { file, modelConfig } = e.data;
 
   // Model
-  const yolo_model = await ort.InferenceSession.create(modelConfig.model_path, {
+  const yolo_model = await InferenceSession.create(modelConfig.model_path, {
     executionProviders: [modelConfig.backend],
   });
 
