@@ -21,32 +21,37 @@ This web application built on ONNX Runtime Web implements YOLO's multi-task infe
 
 The application supports multiple input types for object detection:
 
-| Input Type | Format | Description | Use Case |
-| :--------- | :----: | :---------- | :------- |
-| 📷 **Image** | JPG, PNG | Upload and analyze static images | 🔍 Single image analysis, batch processing |
-| 📹 **Video** | MP4 | Upload and process video files | 🎬 Offline video analysis, content review |
+| Input Type         |      Format      | Description                          | Use Case                                   |
+| :----------------- | :--------------: | :----------------------------------- | :----------------------------------------- |
+| 📷 **Image**       |     JPG, PNG     | Upload and analyze static images     | 🔍 Single image analysis, batch processing |
+| 📹 **Video**       |       MP4        | Upload and process video files       | 🎬 Offline video analysis, content review  |
 | 📺 **Live Camera** | Real-time stream | Use device camera for live detection | 🚀 Real-time monitoring, interactive demos |
 
-
 ## 📊 Available Models
-| Model                                                  | Input Size | Param. | Best For |
-| :----------------------------------------------------- | :--------: | :----: | :------: |
-| [YOLO11-N](https://github.com/ultralytics/ultralytics) |    640     |  2.6M  | 📱 Mobile devices & real-time applications |
-| [YOLO11-S](https://github.com/ultralytics/ultralytics) |    640     |  9.4M  | 🖥️ Higher accuracy requirements |
+
+| Model                                                  | Input Size | Params | mAP<sup>val<br>50-95 | Speed<br><sup>T4 TensorRT10<br>(ms) | Best For                                   | License                                                                                                  |
+| ------------------------------------------------------ | ---------- | ------ | -------------------- | ----------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| [YOLO11-N](https://github.com/ultralytics/ultralytics) | 640        | 2.6M   | 39.5                 | 1.5                                 | 📱 Mobile devices & real-time applications | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
+| [YOLO11-S](https://github.com/ultralytics/ultralytics) | 640        | 9.4M   | 47.0                 | 2.5                                 | 🖥️ Higher accuracy requirements            | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
+| [YOLO12-N](https://github.com/ultralytics/ultralytics) | 640        | 2.6M   | 40.6                 | 1.64                                | 📱 Mobile devices & real-time applications | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
+| [YOLO12-S](https://github.com/ultralytics/ultralytics) | 640        | 9.3M   | 48.0                 | 2.61                                | 🖥️ Higher accuracy requirements            | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
 
 ## 🛠️ Installation Guide
 
 1. Clone this repository
+
 ```bash
 git clone https://github.com/nomi30701/yolo-multi-task-onnxruntime-web.git
 ```
 
 2. cd to the project directory
+
 ```bash
 cd yolo-multi-task-onnxruntime-web
 ```
 
 3. Install dependencies
+
 ```bash
 yarn install
 ```
@@ -54,11 +59,13 @@ yarn install
 ## 🚀 Running the Project
 
 Start development server
+
 ```bash
 yarn dev
 ```
 
 Build the project
+
 ```bash
 yarn build
 ```
@@ -86,7 +93,7 @@ model.export(format="onnx", opset=12, dynamic=True)
 You can either:
 
 - 📁 Copy your ONNX model file to the `./public/models/` directory
-- 🔄 Upload your model directly through the `**Add model**` button in the web interface 
+- 🔄 Upload your model directly through the `**Add model**` button in the web interface
 
 #### 📁 Copy your ONNX model file to the `./public/models/` directory
 
@@ -110,12 +117,13 @@ Update the `src/utils/yolo_classes.json` file with the class names that your cus
 For example:
 
 ```json
-{"class": 
-  {"0": "person", 
-   "1": "bicycle",
-   "2": "car",
-   "3": "motorcycle",
-   "4": "airplane"
+{
+  "class": {
+    "0": "person",
+    "1": "bicycle",
+    "2": "car",
+    "3": "motorcycle",
+    "4": "airplane"
   }
 }
 ```
@@ -133,6 +141,7 @@ Make sure the classes match exactly with those used during training of your cust
 The web application provides two options for handling input image sizes, controlled by the `imgsz_type` setting:
 
 - **Dynamic:**
+
   - When selected, the input image is used at its original size without resizing.
   - Inference time may vary depending on the image resolution; larger images take longer to process.
 

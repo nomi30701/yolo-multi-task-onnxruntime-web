@@ -71,6 +71,8 @@ function SettingsPanel({
           >
             <option value="yolo11n">yolo11n-2.6M</option>
             <option value="yolo11s">yolo11s-9.4M</option>
+            <option value="yolo12n">yolo12n-2.6M</option>
+            <option value="yolo12s">yolo12s-9.3M</option>
             {customModels.map((model, index) => (
               <option key={index} value={model.url}>
                 {model.name}
