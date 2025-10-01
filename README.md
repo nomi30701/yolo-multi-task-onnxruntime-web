@@ -112,6 +112,16 @@ Replace `"your-custom-model-name"` with the filename of your ONNX model.
 
 ### Step 3: Update class definitions
 
+You have two options to define class labels for your custom model:
+
+#### Option 1: Use the built-in class editor
+
+1. Click the **Add Classes.json** button in the web interface
+2. Upload your custom `classes.json` file OR
+3. Use the default COCO classes by selecting "Use Default Classes"
+
+#### Option 2: Manually update the classes file
+
 Update the `src/utils/yolo_classes.json` file with the class names that your custom model uses. This file should contain a dict of strings representing the class labels.
 
 For example:
@@ -129,6 +139,12 @@ For example:
 ```
 
 Make sure the classes match exactly with those used during training of your custom model.
+
+> 💡 **Tip**: The web interface allows you to:
+>
+> - 📤 Upload custom `classes.json` files for different models
+> - 🔄 Switch between default and custom class definitions
+> - ✅ Validate your class definitions before inference
 
 ### Step 4: Refresh and select your new model 🎉
 
