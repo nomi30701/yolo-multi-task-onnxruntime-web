@@ -82,7 +82,7 @@ function draw_object_detection(ctx, predictions, lineWidth, currentClasses) {
     items.forEach((predict) => {
       const [x1, y1] = predict.bbox;
       const text = `${
-        currentClasses.class[predict.class_idx]
+        currentClasses.classes[predict.class_idx]
       } ${predict.score.toFixed(2)}`;
       drawTextWithBackground(ctx, text, x1, y1);
     });
@@ -214,7 +214,7 @@ function draw_segmentation(ctx, predictions, lineWidth, currentClasses) {
     items.forEach((predict) => {
       const [x1, y1] = predict.bbox;
       const text = `${
-        currentClasses.class[predict.class_idx]
+        currentClasses.classes[predict.class_idx]
       } ${predict.score.toFixed(2)}`;
       drawTextWithBackground(ctx, text, x1, y1);
     });
