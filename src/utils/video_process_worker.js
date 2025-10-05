@@ -129,7 +129,12 @@ self.onmessage = async function (e) {
         [inputCanvas.width, inputCanvas.height],
         modelConfig
       );
-      await render_overlay(results, modelConfig.task, resultCtx);
+      await render_overlay(
+        results,
+        modelConfig.task,
+        resultCtx,
+        modelConfig.classes
+      );
 
       // Create frame from result canvas
       const outputFrame = new VideoFrame(resultCanvas, {

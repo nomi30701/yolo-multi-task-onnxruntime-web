@@ -14,6 +14,7 @@ const MODEL_CONFIG = {
   model_path: "",
   task: "detect",
   imgsz_type: "dynamic",
+  classes: classes,
 };
 
 // Settings Components
@@ -119,6 +120,15 @@ function SettingsPanel({
               ref={classFileSelectedRef}
               defaultValue="default"
               disabled={activeFeature !== null}
+              onChange={(e) => {
+                if (e.target.value === "default") {
+                  modelConfigRef.current.classes = classes;
+                } else {
+                  const selectedIndex = parseInt(e.target.value);
+                  modelConfigRef.current.classes =
+                    customClasses[selectedIndex].data;
+                }
+              }}
               className="p-2 text-sm rounded-md bg-gray-700 text-white border border-gray-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500 transition-all"
             >
               <option value="default">Default Classes (COCO)</option>
@@ -812,17 +822,6 @@ function App() {
     reader.readAsText(file);
   }, []);
 
-  const getCurrentClasses = useCallback(() => {
-    const selectedValue = classFileSelectedRef.current?.value;
-
-    if (selectedValue === "default" || !selectedValue) {
-      return classes; // 預設 COCO 類別
-    } else {
-      const index = parseInt(selectedValue);
-      return customClasses[index]?.data || classes; // 容錯處理
-    }
-  }, [customClasses]);
-
   // Button Upload Image
   const handle_OpenImage = useCallback(
     (imgUrl = null) => {
@@ -849,8 +848,6 @@ function App() {
     overlayRef.current.width = imgRef.current.width;
     overlayRef.current.height = imgRef.current.height;
 
-    console.log;
-
     // inference
     try {
       const [results, results_inferenceTime] = await inference_pipeline(
@@ -871,7 +868,7 @@ function App() {
         results,
         modelConfigRef.current.task,
         overlayCtx,
-        getCurrentClasses()
+        modelConfigRef.current.classes
       );
 
       setDetails(results.bbox_results);
@@ -1056,7 +1053,7 @@ function App() {
         results,
         modelConfigRef.current.task,
         overlayCtx,
-        getCurrentClasses()
+        modelConfigRef.current.classes
       );
 
       setDetails(results.bbox_results);
@@ -1138,7 +1135,10 @@ function App() {
         statusColor={processingStatus.statusColor}
       />
 
-      <ResultsTable details={details} currentClasses={getCurrentClasses()}/>
+      <ResultsTable
+        details={details}
+        currentClasses={modelConfigRef.current.classes}
+      />
     </div>
   );
 }
