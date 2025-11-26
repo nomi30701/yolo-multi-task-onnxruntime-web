@@ -19,7 +19,6 @@ import { preProcess_img, applyNMS, Colors } from "./img_preprocess";
  *   - Second element: Inference time in milliseconds (formatted to 2 decimal places)
  *
  */
-
 export async function inference_pipeline(
   imageSource,
   session,
@@ -226,14 +225,15 @@ function postProcess_pose(raw_tensor, score_threshold = 0.45, xRatio, yRatio) {
  *       bbox: [number, number, number, number], // [x, y, w, h] in original image coords
  *       class_idx: number,                      // predicted class index
  *       score: number,                          // confidence score
- *       mask_weights: Float32Array              // length M, mask coefficients for prototypes
+ *       mask_weight_idx: number
  *     }
  *   - masksData: Object containing mask prototype info:
  *     {
- *       proto_mask: Float32Array, // flattened proto data length = M * Hm * Wm
- *       MASK_CHANNELS: number,    // M
- *       MASK_HEIGHT: number,      // Hm
- *       MASK_WIDTH: number        // Wm
+ *       proto_mask: Float32Array,
+ *       mask_weights_data: Float32Array,
+ *       MASK_CHANNELS: number,
+ *       MASK_HEIGHT: number,
+ *       MASK_WIDTH: number
  *     }
  */
 function postProcess_segment(
@@ -283,21 +283,20 @@ function postProcess_segment(
     const tlx = bbox_data[i] * xRatio - 0.5 * w;
     const tly = bbox_data[i + NUM_PREDICTIONS] * yRatio - 0.5 * h;
 
-    const mask_weights = new Float32Array(NUM_MASK_WEIGHTS);
-    for (let c = 0; c < NUM_MASK_WEIGHTS; c++) {
-      mask_weights[c] = mask_weights_data[i + c * NUM_PREDICTIONS];
-    }
-
+    // OPTIMIZATION: Do not create new Float32Array here.
+    // Just store the index (i) to extract weights later after NMS.
     results[resultCount++] = {
       bbox: [tlx, tly, w, h],
       class_idx,
       score: maxScore,
-      mask_weights,
+      mask_weight_idx: i,
     };
   }
 
   const masksData = {
     proto_mask,
+    // Use slice() to create a safe copy, ensuring data persists after output0.dispose()
+    mask_weights_data: mask_weights_data.slice(),
     MASK_CHANNELS,
     MASK_HEIGHT,
     MASK_WIDTH,
@@ -315,7 +314,13 @@ function postProcess_segment(
  */
 function postProcess_mask(filtered_results, masksData, overlay_size) {
   if (!filtered_results || filtered_results.length === 0) return null;
-  const { proto_mask, MASK_CHANNELS, MASK_HEIGHT, MASK_WIDTH } = masksData;
+  const {
+    proto_mask,
+    mask_weights_data,
+    MASK_CHANNELS,
+    MASK_HEIGHT,
+    MASK_WIDTH,
+  } = masksData;
 
   // proto_mask: [1, 32*160*160] -> cv.Mat(32, 160*160)
   const proto_mask_mat = cv.matFromArray(
@@ -329,10 +334,17 @@ function postProcess_mask(filtered_results, masksData, overlay_size) {
     // Weights x Proto_mask
     const NUM_FILTERED_RESULTS = filtered_results.length;
 
-    // mask_weights: [1, N*32] -> cv.Mat(N, 32)
-    const mask_weights = filtered_results
-      .map((r) => Array.from(r.mask_weights))
-      .flat();
+    const NUM_PREDICTIONS = mask_weights_data.length / MASK_CHANNELS;
+    const mask_weights = new Float32Array(NUM_FILTERED_RESULTS * MASK_CHANNELS);
+
+    for (let i = 0; i < NUM_FILTERED_RESULTS; i++) {
+      const base_idx = filtered_results[i].mask_weight_idx;
+      for (let c = 0; c < MASK_CHANNELS; c++) {
+        mask_weights[i * MASK_CHANNELS + c] =
+          mask_weights_data[base_idx + c * NUM_PREDICTIONS];
+      }
+    }
+
     const mask_weights_mat = cv.matFromArray(
       NUM_FILTERED_RESULTS,
       MASK_CHANNELS,
@@ -395,57 +407,78 @@ function postProcess_mask(filtered_results, masksData, overlay_size) {
         mask
       );
 
-      // Resize to overlay size
-      cv.resize(
-        mask_mat,
-        mask_resized_mat,
-        new cv.Size(overlay_size[0], overlay_size[1]),
-        cv.INTER_LINEAR
-      );
-
-      // Binarize to 0/1 mask
-      cv.threshold(
-        mask_resized_mat,
-        mask_binary_mat,
-        0.5,
-        255,
-        cv.THRESH_BINARY
-      );
-      mask_binary_mat.convertTo(mask_binary_u8_mat, cv.CV_8U);
-
-      // ROI
       const [x, y, w, h] = filtered_results[i].bbox;
-      const x1 = Math.max(0, Math.floor(x));
-      const y1 = Math.max(0, Math.floor(y));
-      const x2 = Math.min(overlay_size[0], Math.ceil(x + w));
-      const y2 = Math.min(overlay_size[1], Math.ceil(y + h));
-      const roi = mask_binary_u8_mat.roi(new cv.Rect(x1, y1, x2 - x1, y2 - y1));
 
-      // Colorize mask
-      const color = Colors.getColor(filtered_results[i].class_idx, 0.6);
-      const color_scalar = new cv.Scalar(
-        color[0],
-        color[1],
-        color[2],
-        color[3] * 255
-      );
-      const mask_colored_mat = new cv.Mat(
-        roi.rows,
-        roi.cols,
-        cv.CV_8UC4,
-        color_scalar
-      );
+      // 1. Calculate coordinates on the 160x160 mask
+      const scaleX = MASK_WIDTH / overlay_size[0];
+      const scaleY = MASK_HEIGHT / overlay_size[1];
 
-      // Copy to overlay mat
-      mask_colored_mat.copyTo(
-        overlay_mat.roi(new cv.Rect(x1, y1, x2 - x1, y2 - y1)),
-        roi
-      );
+      const mask_x = Math.floor(Math.max(0, x * scaleX));
+      const mask_y = Math.floor(Math.max(0, y * scaleY));
+      const mask_w = Math.ceil(Math.min(MASK_WIDTH - mask_x, w * scaleX));
+      const mask_h = Math.ceil(Math.min(MASK_HEIGHT - mask_y, h * scaleY));
 
-      // release mat
+      // Boundary check
+      if (mask_w > 0 && mask_h > 0) {
+        // 2. Crop the small region from 160x160 mask
+        const mask_roi = mask_mat.roi(
+          new cv.Rect(mask_x, mask_y, mask_w, mask_h)
+        );
+
+        // 3. Resize only this small region to the target bbox size
+        const target_x = Math.max(0, Math.floor(x));
+        const target_y = Math.max(0, Math.floor(y));
+        const target_w = Math.min(overlay_size[0] - target_x, Math.ceil(w));
+        const target_h = Math.min(overlay_size[1] - target_y, Math.ceil(h));
+
+        if (target_w > 0 && target_h > 0) {
+          cv.resize(
+            mask_roi,
+            mask_resized_mat,
+            new cv.Size(target_w, target_h),
+            cv.INTER_LINEAR
+          );
+
+          // Binarize
+          cv.threshold(
+            mask_resized_mat,
+            mask_binary_mat,
+            0.5,
+            255,
+            cv.THRESH_BINARY
+          );
+          mask_binary_mat.convertTo(mask_binary_u8_mat, cv.CV_8U);
+
+          // Colorize mask
+          const color = Colors.getColor(filtered_results[i].class_idx, 0.6);
+          const color_scalar = new cv.Scalar(
+            color[0],
+            color[1],
+            color[2],
+            color[3] * 255
+          );
+
+          // Create colored mat with target size
+          const mask_colored_mat = new cv.Mat(
+            target_h,
+            target_w,
+            cv.CV_8UC4,
+            color_scalar
+          );
+
+          // Copy to overlay mat at the specific bbox location
+          mask_colored_mat.copyTo(
+            overlay_mat.roi(
+              new cv.Rect(target_x, target_y, target_w, target_h)
+            ),
+            mask_binary_u8_mat
+          );
+
+          mask_colored_mat.delete();
+        }
+        mask_roi.delete();
+      }
       mask_mat.delete();
-      mask_colored_mat.delete();
-      roi.delete();
     }
     mask_resized_mat.delete();
     mask_binary_mat.delete();
@@ -467,5 +500,6 @@ function postProcess_mask(filtered_results, masksData, overlay_size) {
   } catch (error) {
     console.error("Error masks:", error);
     proto_mask_mat.delete();
+    return null;
   }
 }

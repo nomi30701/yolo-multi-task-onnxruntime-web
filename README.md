@@ -2,171 +2,148 @@
 
 <div align="center">
 <img src="./preview.png" width="80%" alt="YOLO Multi-Task Preview">
+
+<br>
+
+[![ONNX Runtime Web](https://img.shields.io/badge/ONNX%20Runtime-Web-blue)](https://onnxruntime.ai/)
+[![YOLO](https://img.shields.io/badge/YOLO-v11%2Fv12-green)](https://github.com/ultralytics/ultralytics)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
 </div>
+
+## 📖 Introduction
+
+This web application, built on **ONNX Runtime Web**, brings the power of YOLO directly to your browser. It supports full client-side inference for Object Detection, Pose Estimation, and Instance Segmentation without sending data to a server.
+
+## ⚠️ WebGPU Prerequisites (Important)
+
+To achieve the best performance using **WebGPU**, please ensure the following:
+
+1.  **Browser**: Use a Chromium-based browser (Chrome, Edge, Brave).
+2.  **Enable Flags**:
+    - Type `chrome://flags` (or `edge://flags`) in your address bar.
+    - Search for **"Unsafe WebGPU Support"** and set it to **Enabled**.
+    - **(Linux / Android users)**: Search for **"Vulkan"** (`#enable-vulkan`) and set it to **Enabled**.
+    - Relaunch your browser.
+
+> 💡 **Note**: If WebGPU is not available, the app will automatically fall back to WASM (CPU), which is slower but universally compatible.
 
 ## ✨ Features
 
-This web application built on ONNX Runtime Web implements YOLO's multi-task inference capabilities:
+- 🔍 **Object Detection** - Precisely identify and locate various objects.
+- 👤 **Pose Estimation** - Real-time human keypoint tracking.
+- 🖼️ **Instance Segmentation** - Pixel-level object masking and identification.
+- ⚡ **High Performance** - Powered by WebGPU acceleration.
 
-- 🔍 **Object Detection** - Precisely identify and locate various objects
-- 👤 **Pose Estimation** - Track human keypoints and poses
-- 🖼️ **Instance Segmentation** - Pixel-level object area identification
+## 📹 Input Support
 
-## 💻 Technical Support
+| Input Type         |  Format  | Use Case                                  |
+| :----------------- | :------: | :---------------------------------------- |
+| 📷 **Image**       | JPG, PNG | Single image analysis & batch processing. |
+| 📹 **Video**       |   MP4    | Offline video analysis & content review.  |
+| 📺 **Live Camera** |  Stream  | Real-time monitoring & interactive demos. |
 
-- ⚡ **WebGPU Acceleration** - Leverage the latest Web graphics API for enhanced performance
-- 🧠 **WASM (CPU)** - Provide compatibility on devices that don't support WebGPU
+## 📊 Supported Models
 
-## 📹 Input Types Support
+| Model        | Input Size | Params | mAP<sup>val<br>50-95 | Speed (ms)<br><sup>T4 TensorRT10 | Recommended For       |
+| :----------- | :--------- | :----- | :------------------- | :------------------------------- | :-------------------- |
+| **YOLO11-N** | 640        | 2.6M   | 39.5                 | 1.5                              | 📱 Mobile / Real-time |
+| **YOLO11-S** | 640        | 9.4M   | 47.0                 | 2.5                              | 🖥️ High Accuracy      |
+| **YOLO12-N** | 640        | 2.6M   | 40.6                 | 1.64                             | 📱 Mobile / Real-time |
+| **YOLO12-S** | 640        | 9.3M   | 48.0                 | 2.61                             | 🖥️ High Accuracy      |
 
-The application supports multiple input types for object detection:
+_Models are licensed under [AGPL-3.0](./public/models/LICENSE.txt) via [Ultralytics](https://github.com/ultralytics/ultralytics)._
 
-| Input Type         |      Format      | Description                          | Use Case                                   |
-| :----------------- | :--------------: | :----------------------------------- | :----------------------------------------- |
-| 📷 **Image**       |     JPG, PNG     | Upload and analyze static images     | 🔍 Single image analysis, batch processing |
-| 📹 **Video**       |       MP4        | Upload and process video files       | 🎬 Offline video analysis, content review  |
-| 📺 **Live Camera** | Real-time stream | Use device camera for live detection | 🚀 Real-time monitoring, interactive demos |
+## 🛠️ Installation
 
-## 📊 Available Models
+1. **Clone the repository**
 
-| Model                                                  | Input Size | Params | mAP<sup>val<br>50-95 | Speed<br><sup>T4 TensorRT10<br>(ms) | Best For                                   | License                                                                                                  |
-| ------------------------------------------------------ | ---------- | ------ | -------------------- | ----------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| [YOLO11-N](https://github.com/ultralytics/ultralytics) | 640        | 2.6M   | 39.5                 | 1.5                                 | 📱 Mobile devices & real-time applications | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
-| [YOLO11-S](https://github.com/ultralytics/ultralytics) | 640        | 9.4M   | 47.0                 | 2.5                                 | 🖥️ Higher accuracy requirements            | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
-| [YOLO12-N](https://github.com/ultralytics/ultralytics) | 640        | 2.6M   | 40.6                 | 1.64                                | 📱 Mobile devices & real-time applications | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
-| [YOLO12-S](https://github.com/ultralytics/ultralytics) | 640        | 9.3M   | 48.0                 | 2.61                                | 🖥️ Higher accuracy requirements            | [AGPL-3.0](./public/models/LICENSE.txt) ([Ultralytics YOLO](https://github.com/ultralytics/ultralytics)) |
+   ```bash
+   git clone https://github.com/nomi30701/yolo-multi-task-onnxruntime-web.git
+   cd yolo-multi-task-onnxruntime-web
+   ```
 
-## 🛠️ Installation Guide
+2. **Install dependencies**
 
-1. Clone this repository
+   ```bash
+   yarn install
+   ```
 
-```bash
-git clone https://github.com/nomi30701/yolo-multi-task-onnxruntime-web.git
-```
+3. **Run Development Server**
 
-2. cd to the project directory
+   ```bash
+   yarn dev
+   ```
 
-```bash
-cd yolo-multi-task-onnxruntime-web
-```
+4. **Build for Production**
+   ```bash
+   yarn build
+   ```
 
-3. Install dependencies
+## 🔧 Custom Models Guide
 
-```bash
-yarn install
-```
+You can run your own YOLO models in this app.
 
-## 🚀 Running the Project
+### Step 1: Export to ONNX
 
-Start development server
-
-```bash
-yarn dev
-```
-
-Build the project
-
-```bash
-yarn build
-```
-
-## 🔧 Using Custom YOLO Models
-
-To use a custom YOLO model, follow these steps:
-
-### Step 1: Convert your model to ONNX format
-
-Use Ultralytics or your preferred method to export your YOLO model to ONNX format. Ensure to use `opset=12` for WebGPU compatibility.
+Use Ultralytics to export your model. **Crucial:** Use `opset=12` for WebGPU compatibility.
 
 ```python
 from ultralytics import YOLO
 
-# Load your model
 model = YOLO("path/to/your/model.pt")
-
-# Export to ONNX
+# Export with opset=12 and dynamic shape
 model.export(format="onnx", opset=12, dynamic=True)
 ```
 
-### Step 2: Add the model to the project
+### Step 2: Load your Model
 
-You can either:
+You have two ways to load your model:
 
-- 📁 Copy your ONNX model file to the `./public/models/` directory
-- 🔄 Upload your model directly through the `**Add model**` button in the web interface
+#### Option A: Quick Test (UI Upload)
 
-#### 📁 Copy your ONNX model file to the `./public/models/` directory
+Simply click the **"Add model"** button in the web interface to upload your `.onnx` file temporarily.
 
-In App.jsx
+#### Option B: Permanent Integration (Code)
+
+1. Copy your `.onnx` file to `./public/models/`.
+2. Edit `App.jsx` to add your model to the list:
 
 ```jsx
-<label htmlFor="model-selector">Model:</label>
 <select name="model-selector">
-  <option value="yolo12n">yolo11n-2.6M</option>
-  <option value="yolo12s">yolo11s-9.4M</option>
-  <option value="your-custom-model-name">Your Custom Model</option>
+  <option value="yolo11n">yolo11n-2.6M</option>
+  <option value="your-custom-model">Your Custom Model</option>
 </select>
 ```
 
-Replace `"your-custom-model-name"` with the filename of your ONNX model.
+### Step 3: Update Classes
 
-### Step 3: Update class definitions
+If your model uses custom classes (not COCO), you need to update the class definitions:
 
-You have two options to define class labels for your custom model:
-
-#### Option 1: Use the built-in class editor
-
-1. Click the **Add Classes.json** button in the web interface
-2. Upload your custom `classes.json` file OR
-3. Use the default COCO classes by selecting "Use Default Classes"
-
-#### Option 2: Manually update the classes file
-
-Update the `src/utils/yolo_classes.json` file with the class names that your custom model uses. This file should contain a dict of strings representing the class labels.
-
-For example:
+- **UI Method**: Click **"Add Classes.json"** to upload a JSON file mapping class IDs to names.
+- **Code Method**: Update `src/utils/yolo_classes.json`.
 
 ```json
 {
   "class": {
     "0": "person",
-    "1": "bicycle",
-    "2": "car",
-    "3": "motorcycle",
-    "4": "airplane"
+    "1": "bicycle"
   }
 }
 ```
 
-Make sure the classes match exactly with those used during training of your custom model.
+## ⚙️ Configuration: Image Processing
 
-> 💡 **Tip**: The web interface allows you to:
->
-> - 📤 Upload custom `classes.json` files for different models
-> - 🔄 Switch between default and custom class definitions
-> - ✅ Validate your class definitions before inference
+You can control how images are pre-processed via the `imgsz_type` setting:
 
-### Step 4: Refresh and select your new model 🎉
+- **Dynamic (Default)**:
 
-> 🚀 WebGPU Support
->
-> Ensure you set `opset=12` when exporting ONNX models, as this is required for WebGPU compatibility.
+  - Uses the original image aspect ratio.
+  - **Pros**: Best accuracy.
+  - **Cons**: Slower on large images; inference time varies.
+  - _Requires model exported with `dynamic=True`._
 
-## 📸 Image Processing Options
-
-The web application provides two options for handling input image sizes, controlled by the `imgsz_type` setting:
-
-- **Dynamic:**
-
-  - When selected, the input image is used at its original size without resizing.
-  - Inference time may vary depending on the image resolution; larger images take longer to process.
-
-- **Zero Pad:**
-  - When selected, the input image is first padded with zero pixels to make it square (by adding padding to the right and bottom).
-  - The padded image is then resized to 640x640 pixels.
-  - This option provides a balance between accuracy and inference time, as it avoids extreme scaling while maintaining a predictable processing speed.
-  - Use this option for real-time applications.
-
-> ✨ Dynamic input
->
-> This requires that the YOLO model was exported with `dynamic=True` to support variable input sizes.
+- **Zero Pad (Square)**:
+  - Pads image to square and resizes to 640x640.
+  - **Pros**: Consistent, faster speed suitable for real-time video.
+  - **Cons**: Slight accuracy drop on small objects due to scaling.

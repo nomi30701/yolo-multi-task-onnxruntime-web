@@ -537,6 +537,7 @@ function ModelStatus({ warnUpTime, inferenceTime, statusMsg, statusColor }) {
     </div>
   );
 }
+
 function ResultsTable({ details, currentClasses }) {
   return (
     <div className="container bg-gray-800 rounded-xl shadow-lg p-3 sm:p-4 mb-4 sm:mb-6">
