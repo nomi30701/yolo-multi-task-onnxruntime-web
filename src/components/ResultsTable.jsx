@@ -2,101 +2,80 @@ import React, { memo } from "react";
 
 const ResultsTable = memo(function ResultsTable({ details, currentClasses }) {
   return (
-    <div className="container bg-gray-800 rounded-xl shadow-lg p-3 sm:p-4 mb-4 sm:mb-6">
-      <details className="text-gray-200 group">
-        <summary className="flex items-center cursor-pointer select-none">
-          <div className="flex-1 text-lg sm:text-xl font-bold border-b border-gray-700 pb-2">
-            Detection Results ({details.length})
-          </div>
-          <div className="text-gray-400">
-            <svg
-              className="w-4 h-4 sm:w-5 sm:h-5 transform group-open:rotate-180 transition-transform duration-200"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </div>
-        </summary>
+    <div className="container bg-gray-800 rounded-2xl shadow-xl p-5 mb-6 border border-gray-700">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+          <span className="w-2 h-6 bg-violet-500 rounded-full inline-block"></span>
+          Detections
+          <span className="ml-2 text-sm font-medium bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full border border-gray-600">
+            {details.length}
+          </span>
+        </h2>
+      </div>
 
-        <div className="transition-all duration-300 ease-in-out transform origin-top group-open:animate-details-show mt-3 sm:mt-4">
-          {details.length === 0 ? (
-            <div className="bg-gray-700 rounded-lg p-4 sm:p-8 text-center">
+      <div className="mt-4 overflow-hidden rounded-xl border border-gray-700 bg-gray-900/50">
+        {details.length === 0 ? (
+          <div className="p-8 text-center flex flex-col items-center">
+            <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center mb-3">
               <svg
-                className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-500"
+                className="w-6 h-6 text-gray-600"
                 fill="none"
-                stroke="currentColor"
                 viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
-              <p className="text-gray-400 text-base sm:text-lg">
-                No objects detected
-              </p>
             </div>
-          ) : (
-            <div className="overflow-x-auto -mx-3 px-3">
-              <table className="w-full border-collapse min-w-full">
-                <thead>
-                  <tr className="bg-gray-700 text-left">
-                    <th className="p-2 sm:p-3 rounded-tl-lg text-xs sm:text-sm text-left">
-                      ID
-                    </th>
-                    <th className="p-2 sm:p-3 text-xs sm:text-sm text-left">
-                      Class
-                    </th>
-                    <th className="p-2 sm:p-3 rounded-tr-lg text-xs sm:text-sm text-left">
-                      Confidence
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {details.map((item, index) => (
-                    <tr
-                      key={index}
-                      className={`border-b border-gray-700 hover:bg-gray-700 transition-colors text-gray-300 ${
-                        index === details.length - 1 ? "border-b-0" : ""
-                      }`}
-                    >
-                      <td className="p-2 sm:p-3 font-mono text-xs sm:text-sm text-left">
-                        {index}
-                      </td>
-                      <td className="p-2 sm:p-3 font-medium text-xs sm:text-sm text-left">
-                        {currentClasses[item.class_idx] ||
-                          `Class ${item.class_idx}`}
-                      </td>
-                      <td className="p-2 sm:p-3 text-xs sm:text-sm text-left">
-                        <div className="flex items-center">
-                          <div className="w-full bg-gray-600 rounded-full h-1.5 sm:h-2.5 mr-1 sm:mr-2 max-w-[70px] sm:max-w-[100px]">
-                            <div
-                              className="bg-lime-500 h-1.5 sm:h-2.5 rounded-full"
-                              style={{ width: `${item.score * 100}%` }}
-                            ></div>
-                          </div>
-                          <span>{(item.score * 100).toFixed(1)}%</span>
+            <p className="text-gray-500 font-medium">No objects detected yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-800/80 border-b border-gray-700 text-xs uppercase tracking-wider text-gray-400 font-semibold">
+                  <th className="p-4 w-20">ID</th>
+                  <th className="p-4">Object Class</th>
+                  <th className="p-4 w-48">Confidence Score</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/50">
+                {details.map((item, index) => (
+                  <tr
+                    key={index}
+                    className="hover:bg-violet-500/5 transition-colors group"
+                  >
+                    <td className="p-4 text-gray-500 font-mono text-sm group-hover:text-violet-400">
+                      #{index}
+                    </td>
+                    <td className="p-4 font-medium text-white group-hover:text-violet-200">
+                      {currentClasses[item.classIdx] ||
+                        `Class ${item.classIdx}`}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                            style={{ width: `${item.score * 100}%` }}
+                          ></div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </details>
+                        <span className="text-sm font-mono text-gray-300 w-12 text-right">
+                          {(item.score * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 });
