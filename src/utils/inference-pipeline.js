@@ -5,10 +5,10 @@ import { preProcessImage, Colors, applyNMS } from "./process-util";
  * Inference pipeline for YOLO model.
  * @param {ImageData} imageData - Input image data.
  * @param {ort.InferenceSession} session - YOLO model ONNX Runtime session.
- * @param {object} modelConfig - Model configuration object.
+ * @param {object} config - Model configuration object.
  * @returns {Promise<object>} Inference result object containing detection results, mask image data, and inference time.
  */
-export async function inferencePipeline(imageData, session, modelConfig) {
+export async function inferencePipeline(imageData, session, config) {
   const matsToDelete = [];
   let inputTensor = null;
   let output0 = null;
@@ -24,8 +24,8 @@ export async function inferencePipeline(imageData, session, modelConfig) {
     let xRatio, yRatio;
     [inputTensor, xRatio, yRatio] = preProcessImage(
       srcMat,
-      modelConfig.overlaySize,
-      modelConfig.imgszType,
+      config.overlaySize,
+      config.imgszType,
     );
 
     const start = performance.now();
@@ -38,51 +38,83 @@ export async function inferencePipeline(imageData, session, modelConfig) {
 
     // Post process
     let results, masksData, maskImgData;
-    switch (modelConfig.task) {
+    switch (config.task) {
       case "detect":
-        results = postProcessDetect(
-          output0,
-          modelConfig.score_threshold,
-          xRatio,
-          yRatio,
-        );
+        if (config.enableNMS) {
+          results = postProcessDetect(
+            output0,
+            config.scoreThreshold,
+            xRatio,
+            yRatio,
+          );
+        } else {
+          results = postProcessDetectEnd2End(
+            output0,
+            config.scoreThreshold,
+            xRatio,
+            yRatio,
+          );
+        }
         break;
       case "pose":
-        results = postProcessPose(
-          output0,
-          modelConfig.score_threshold,
-          xRatio,
-          yRatio,
-        );
+        if (config.enableNMS) {
+          results = postProcessPose(
+            output0,
+            config.scoreThreshold,
+            xRatio,
+            yRatio,
+          );
+        } else {
+          results = postProcessPoseEnd2End(
+            output0,
+            config.scoreThreshold,
+            xRatio,
+            yRatio,
+          );
+        }
         break;
-      case "segment":
-        [results, masksData] = postProcessSegment(
-          output0,
-          output1,
-          modelConfig.scoreThreshold,
-          xRatio,
-          yRatio,
-        );
+      case "seg":
+        if (config.enableNMS) {
+          [results, masksData] = postProcessSegment(
+            output0,
+            output1,
+            config.scoreThreshold,
+            xRatio,
+            yRatio,
+          );
+        } else {
+          [results, masksData] = postProcessSegmentEnd2End(
+            output0,
+            output1,
+            config.scoreThreshold,
+            xRatio,
+            yRatio,
+          );
+        }
         break;
       default:
-        console.warn(
-          `Unknown task: ${modelConfig.task}, falling back to detection`,
-        );
+        console.warn(`Unknown task: ${config.task}, falling back to detection`);
     }
 
     // Apply NMS
-    const selectedIndices = applyNMS(
-      results,
-      results.map((r) => r.score),
-      modelConfig.iou_threshold,
-    );
-    const filteredResults = selectedIndices.map((i) => results[i]);
+    let filteredResults;
+    if (config.enableNMS) {
+      const selectedIndices = applyNMS(
+        results,
+        results.map((r) => r.score),
+        config.iouThreshold,
+      );
 
-    if (modelConfig.task === "segment") {
+      filteredResults = selectedIndices.map((i) => results[i]);
+    } else {
+      filteredResults = results;
+    }
+
+    if (config.task === "seg") {
       maskImgData = postProcessMask(
         filteredResults,
         masksData,
-        modelConfig.overlaySize,
+        config.overlaySize,
       );
     }
 
@@ -169,6 +201,54 @@ function postProcessDetect(rawTensor, scoreThreshold = 0.45, xRatio, yRatio) {
 }
 
 /**
+ * Post-process for End-to-End models (like YOLO26) which output [1, 300, 6].
+ * Structure: [Batch, MaxDets, [Class, Score, X1, Y1, X2, Y2]]
+ *
+ * @param {ort.Tensor} rawTensor - Output tensor [1, 300, 6]
+ * @param {number} scoreThreshold - Confidence threshold
+ * @param {number} xRatio - Width scale ratio
+ * @param {number} yRatio - Height scale ratio
+ * @returns {Array<Object>}
+ */
+function postProcessDetectEnd2End(rawTensor, scoreThreshold, xRatio, yRatio) {
+  const predictions = rawTensor.data;
+
+  // dims expected: [1, 300, 6]
+  const NUM_DETECTIONS = rawTensor.dims[1]; // 300
+  const NUM_ATTRIBUTES = rawTensor.dims[2]; // 6
+
+  const results = [];
+
+  for (let i = 0; i < NUM_DETECTIONS; i++) {
+    const offset = i * NUM_ATTRIBUTES;
+    const score = predictions[offset + 4];
+
+    if (score <= scoreThreshold) break;
+    // 0: x1, 1: y1, 2: x2, 3: y2
+    // 4: confidence
+    // 5: class_id
+    const classIdx = Math.round(predictions[offset + 5]);
+
+    const x1 = predictions[offset] * xRatio;
+    const y1 = predictions[offset + 1] * yRatio;
+    const x2 = predictions[offset + 2] * xRatio;
+    const y2 = predictions[offset + 3] * yRatio;
+
+    // Convert to [x, y, w, h]
+    const w = x2 - x1;
+    const h = y2 - y1;
+
+    results.push({
+      bbox: [x1, y1, w, h],
+      classIdx: classIdx,
+      score: score,
+    });
+  }
+
+  return results;
+}
+
+/**
  * Post-process raw outputs for pose estimation.
  *
  * @param {ort.Tensor} rawTensor - Model output tensor.
@@ -219,6 +299,66 @@ function postProcessPose(rawTensor, scoreThreshold = 0.45, xRatio, yRatio) {
 }
 
 /**
+ * Post-process for End-to-End Pose models.
+ * Expected tensor shape: [Batch, MaxDets, 6 + Keypoints*3]
+ * Structure of attributes: [x1, y1, x2, y2, score, class, kp1_x, kp1_y, kp1_conf, ...]
+ *
+ * @param {ort.Tensor} rawTensor - Model output tensor.
+ * @param {number} scoreThreshold - Threshold for confidence score.
+ * @param {number} xRatio - Width scaling ratio.
+ * @param {number} yRatio - Height scaling ratio.
+ * @returns {Array<Object>} Array of pose results: [{bbox, score, keypoints}, ...].
+ */
+function postProcessPoseEnd2End(
+  rawTensor,
+  scoreThreshold = 0.45,
+  xRatio,
+  yRatio,
+) {
+  // post process
+  const NUM_PREDICTIONS = rawTensor.dims[1]; // 300
+  const NUM_ATTRIBUTED = rawTensor.dims[2]; // 6 + 17*3
+  const NUM_BBOX_ATTRS = 6; // x1, y1, x2, y2, score, classidx
+  const NUM_KEYPOINTS = 17;
+  const KEYPOINT_DIMS = 3; // x, y, visibility
+
+  const predictions = rawTensor.data;
+  const results = new Array();
+  let resultCount = 0;
+
+  for (let i = 0; i < NUM_PREDICTIONS; i++) {
+    const offset = i * NUM_ATTRIBUTED;
+    const score = predictions[offset + 4];
+    if (score <= scoreThreshold) break;
+
+    const x1 = predictions[offset] * xRatio;
+    const y1 = predictions[offset + 1] * yRatio;
+    const x2 = predictions[offset + 2] * xRatio;
+    const y2 = predictions[offset + 3] * yRatio;
+
+    const w = x2 - x1;
+    const h = y2 - y1;
+
+    const keypoints = new Array(NUM_KEYPOINTS);
+    for (let kp = 0; kp < NUM_KEYPOINTS; kp++) {
+      const baseIdx = offset + NUM_BBOX_ATTRS + kp * KEYPOINT_DIMS;
+      keypoints[kp] = {
+        x: predictions[baseIdx] * xRatio,
+        y: predictions[baseIdx + 1] * yRatio,
+        score: predictions[baseIdx + 2],
+      };
+    }
+
+    results[resultCount++] = {
+      bbox: [x1, y1, w, h],
+      score,
+      keypoints,
+    };
+  }
+  return results;
+}
+
+/**
  * Post-process raw outputs for instance segmentation.
  *
  * @param {ort.Tensor} output0 - Detection output tensor (shape: [1, G, 4 + C + M]).
@@ -228,13 +368,19 @@ function postProcessPose(rawTensor, scoreThreshold = 0.45, xRatio, yRatio) {
  * @param {number} yRatio - Height scaling ratio.
  * @returns {[Array<Object>, Object]} Tuple of [results, masksData].
  */
-function postProcessSegment(output0, output1, scoreThreshold, xRatio, yRatio) {
-  const NUM_PREDICTIONS = output0.dims[2];
+function postProcessSegment(
+  rawTensor,
+  rawMaskTensor,
+  scoreThreshold,
+  xRatio,
+  yRatio,
+) {
+  const NUM_PREDICTIONS = rawTensor.dims[2];
   const NUM_BBOX_ATTRS = 4;
   const NUM_SCORES = 80;
   const NUM_MASK_WEIGHTS = 32;
 
-  const predictions = output0.data;
+  const predictions = rawTensor.data;
   const bboxData = predictions.subarray(0, NUM_PREDICTIONS * NUM_BBOX_ATTRS);
   const scoresData = predictions.subarray(
     NUM_PREDICTIONS * NUM_BBOX_ATTRS,
@@ -244,10 +390,10 @@ function postProcessSegment(output0, output1, scoreThreshold, xRatio, yRatio) {
     NUM_PREDICTIONS * (NUM_BBOX_ATTRS + NUM_SCORES),
   );
 
-  const protoMask = output1.data;
-  const MASK_CHANNELS = output1.dims[1];
-  const MASK_HEIGHT = output1.dims[2];
-  const MASK_WIDTH = output1.dims[3];
+  const protoMask = rawMaskTensor.data;
+  const MASK_CHANNELS = rawMaskTensor.dims[1];
+  const MASK_HEIGHT = rawMaskTensor.dims[2];
+  const MASK_WIDTH = rawMaskTensor.dims[3];
 
   const results = new Array();
   let resultCount = 0;
@@ -280,6 +426,81 @@ function postProcessSegment(output0, output1, scoreThreshold, xRatio, yRatio) {
   const masksData = {
     protoMask,
     maskWeightsData: maskWeightsData.slice(),
+    MASK_CHANNELS,
+    MASK_HEIGHT,
+    MASK_WIDTH,
+  };
+
+  return [results, masksData];
+}
+
+/**
+ * Post-process for End-to-End Segmentation models.
+ * Processes bounding boxes and extracts mask weights embedded in the main tensor.
+ *
+ * @param {ort.Tensor} rawTensor - Main output tensor containing boxes, scores, and mask weights.
+ * @param {ort.Tensor} rawMaskTensor - Prototype masks output tensor.
+ * @param {number} scoreThreshold - Threshold for confidence score.
+ * @param {number} xRatio - Width scaling ratio.
+ * @param {number} yRatio - Height scaling ratio.
+ * @returns {[Array<Object>, Object]} Tuple of [results, masksData].
+ */
+function postProcessSegmentEnd2End(
+  rawTensor,
+  rawMaskTensor,
+  scoreThreshold,
+  xRatio,
+  yRatio,
+) {
+  const NUM_PREDICTIONS = rawTensor.dims[1];
+  const NUM_ATTRIBUTES = rawTensor.dims[2];
+  const NUM_BBOX_ATTRS = 6; // x1, y1, x2, y2, score, classidx
+  const NUM_MASK_WEIGHTS = 32;
+
+  const predictions = rawTensor.data;
+
+  const protoMask = rawMaskTensor.data;
+  const MASK_CHANNELS = rawMaskTensor.dims[1];
+  const MASK_HEIGHT = rawMaskTensor.dims[2];
+  const MASK_WIDTH = rawMaskTensor.dims[3];
+
+  const results = new Array();
+  const maskWeightsData = new Float32Array(NUM_PREDICTIONS * NUM_MASK_WEIGHTS);
+
+  let resultCount = 0;
+  for (let i = 0; i < NUM_PREDICTIONS; i++) {
+    const offset = i * NUM_ATTRIBUTES;
+    const score = predictions[offset + 4];
+
+    if (score <= scoreThreshold) break;
+
+    const classIdx = Math.round(predictions[offset + 5]);
+    const x1 = predictions[offset] * xRatio;
+    const y1 = predictions[offset + 1] * yRatio;
+    const x2 = predictions[offset + 2] * xRatio;
+    const y2 = predictions[offset + 3] * yRatio;
+
+    const w = x2 - x1;
+    const h = y2 - y1;
+
+    // copy and transpose mask weights
+    for (let c = 0; c < NUM_MASK_WEIGHTS; c++) {
+      const sourceIdx = offset + 6 + c;
+      const destIdx = i + c * NUM_PREDICTIONS;
+      maskWeightsData[destIdx] = predictions[sourceIdx];
+    }
+
+    results[resultCount++] = {
+      bbox: [x1, y1, w, h],
+      classIdx,
+      score: score,
+      maskWeightIdx: i,
+    };
+  }
+
+  const masksData = {
+    protoMask,
+    maskWeightsData,
     MASK_CHANNELS,
     MASK_HEIGHT,
     MASK_WIDTH,

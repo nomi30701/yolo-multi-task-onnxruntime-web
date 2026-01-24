@@ -53,7 +53,7 @@ export async function renderOverlay(
     case "pose":
       drawPoseEstimation(predictions, overlayCtx, lineWidth);
       break;
-    case "segment":
+    case "seg":
       if (maskImageData) {
         overlayCtx.putImageData(maskImageData, 0, 0);
       }

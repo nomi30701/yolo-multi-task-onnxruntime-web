@@ -51,6 +51,8 @@ To achieve the best performance using **WebGPU**, please ensure the following:
 | **YOLO11-S** | 640        | 9.4M   | 47.0                 | 2.5                              | 🖥️ High Accuracy      |
 | **YOLO12-N** | 640        | 2.6M   | 40.6                 | 1.64                             | 📱 Mobile / Real-time |
 | **YOLO12-S** | 640        | 9.3M   | 48.0                 | 2.61                             | 🖥️ High Accuracy      |
+| **YOLO26-N** | 640        | 2.4M   | 40.9                 | 1.70                             | 📱 Mobile / Real-time |
+| **YOLO12-S** | 640        | 9.M    | 48.6                 | 2.5                              | 🖥️ High Accuracy      |
 
 _Models are licensed under [AGPL-3.0](./public/models/LICENSE.txt) via [Ultralytics](https://github.com/ultralytics/ultralytics)._
 

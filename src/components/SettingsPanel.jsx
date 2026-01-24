@@ -1,5 +1,4 @@
-import React, { memo, useRef } from "react";
-import { env } from "onnxruntime-web/webgpu";
+import { memo, useRef, useState } from "react";
 
 const SettingsPanel = memo(function SettingsPanel({
   cameraSelectorRef,
@@ -12,6 +11,8 @@ const SettingsPanel = memo(function SettingsPanel({
   defaultClasses,
   loadModel,
 }) {
+  const [nmsEnabled, setNmsEnabled] = useState(true);
+  const [nmsLocked, setNmsLocked] = useState(true);
   const threadTimeoutRef = useRef(null);
 
   const handleThreadChange = (e) => {
@@ -73,7 +74,7 @@ const SettingsPanel = memo(function SettingsPanel({
               >
                 <option value="detect">Object Detection</option>
                 <option value="pose">Pose Estimation</option>
-                <option value="segment">Segmentation</option>
+                <option value="seg">Segmentation</option>
               </select>
             </div>
 
@@ -81,7 +82,29 @@ const SettingsPanel = memo(function SettingsPanel({
               <label className={labelClass}>Model</label>
               <select
                 onChange={(e) => {
-                  modelConfigRef.current.model = e.target.value;
+                  const selectedModel = e.target.value;
+                  modelConfigRef.current.model = selectedModel;
+
+                  if (
+                    // yolo11 and yolo12 require NMS, lock it on
+                    selectedModel.startsWith("yolo11") ||
+                    selectedModel.startsWith("yolo12")
+                  ) {
+                    setNmsEnabled(true);
+                    setNmsLocked(true);
+                    modelConfigRef.current.enableNMS = true;
+                  } else if (selectedModel.startsWith("yolo26")) {
+                    // yolo26 has built-in NMS, lock it on
+                    setNmsEnabled(false);
+                    setNmsLocked(true);
+                    modelConfigRef.current.enableNMS = false;
+                  } else {
+                    // Custom models, allow user to toggle NMS
+                    setNmsEnabled(true);
+                    setNmsLocked(false);
+                    modelConfigRef.current.enableNMS = true;
+                  }
+
                   loadModel();
                 }}
                 disabled={activeFeature !== null}
@@ -89,9 +112,10 @@ const SettingsPanel = memo(function SettingsPanel({
               >
                 <option value="yolo11n">YOLO11n (2.6M)</option>
                 <option value="yolo11s">YOLO11s (9.4M)</option>
-                <option value="yolo11m">YOLO11m (20.1M)</option>
                 <option value="yolo12n">YOLO12n (2.6M)</option>
                 <option value="yolo12s">YOLO12s (9.3M)</option>
+                <option value="yolo26n">YOLO26n (2.4M)</option>
+                <option value="yolo26s">YOLO26s (9.5M)</option>
                 {customModels.map((model, index) => (
                   <option key={index} value={model.url}>
                     {model.name}
@@ -123,6 +147,42 @@ const SettingsPanel = memo(function SettingsPanel({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="flex flex-col sm:col-span-2">
+              <label className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-600/50 hover:bg-gray-700/50 cursor-pointer transition-colors group">
+                <div className="flex flex-col">
+                  <span className="text-gray-200 font-medium text-sm group-hover:text-white transition-colors">
+                    Non-Maximum Suppression (NMS)
+                  </span>
+                  <span className="text-gray-400 text-xs">
+                    {nmsLocked
+                      ? nmsEnabled
+                        ? "Required & Locked for this model"
+                        : "Disabled & Locked for YOLO26"
+                      : "Optional for Custom Models"}
+                  </span>
+                </div>
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={nmsEnabled}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setNmsEnabled(isChecked);
+                      modelConfigRef.current.enableNMS = isChecked;
+                    }}
+                    disabled={activeFeature !== null || nmsLocked}
+                    className="peer sr-only "
+                  />
+                  <div
+                    className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all 
+                    ${activeFeature !== null || nmsLocked ? "opacity-50 cursor-not-allowed" : ""}
+                    ${nmsEnabled ? "peer-checked:bg-violet-600 bg-violet-600" : "bg-gray-700"}
+                  `}
+                  ></div>
+                </div>
+              </label>
             </div>
           </div>
         </div>

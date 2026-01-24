@@ -22,6 +22,7 @@ const DEFAULT_MODEL_CONFIG = {
   scoreThreshold: 0.45,
   backend: "wasm",
   numThreads: 1,
+  enableNMS: true,
   model: "yolo11n",
   modelPath: "",
   task: "detect",
