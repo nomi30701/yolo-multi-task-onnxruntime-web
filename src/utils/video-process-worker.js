@@ -1,4 +1,3 @@
-import cv from "@techstark/opencv-js";
 import { InferenceSession } from "onnxruntime-web/webgpu";
 import { MP4Demuxer } from "./demuxer";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
@@ -114,25 +113,24 @@ self.onmessage = async function (e) {
       resultCtx.drawImage(frame, 0, 0);
 
       // Process input frame
-      // const imgData = inputCtx.getImageData(
-      //   0,
-      //   0,
-      //   inputCanvas.width,
-      //   inputCanvas.height
-      // );
-      // const src_mat = cv.matFromImageData(imgData);
+      const imgData = inputCtx.getImageData(
+        0,
+        0,
+        inputCanvas.width,
+        inputCanvas.height
+      );
 
       // Inference, Draw
-      const [results, inferenceTime] = await inference_pipeline(
-        inputCanvas,
+      const { results, maskImageData, inferenceTime } = await inferencePipeline(
+        imgData,
         yolo_model,
-        [inputCanvas.width, inputCanvas.height],
         modelConfig
       );
-      await render_overlay(
+      await renderOverlay(
         results,
-        modelConfig.task,
+        maskImageData,
         resultCtx,
+        modelConfig.task,
         modelConfig.classes
       );
 

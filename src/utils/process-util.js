@@ -19,7 +19,7 @@ const preProcessImage = (srcMat, size, imgszType) => {
     );
     inputTensor = new Tensor(
       "float32",
-      preProcessed.data32F,
+      new Float32Array(preProcessed.data32F),
       [1, 3, divHeight, divWidth], // [batch, channel, height, width]
     );
   } else if (imgszType === "zeroPad") {
@@ -27,7 +27,7 @@ const preProcessImage = (srcMat, size, imgszType) => {
     [preProcessed, xRatio, yRatio] = imgZeroPad(srcMat, modelSize, size);
     inputTensor = new Tensor(
       "float32",
-      preProcessed.data32F,
+      new Float32Array(preProcessed.data32F),
       [1, 3, modelSize[1], modelSize[0]], // [batch, channel, height, width]
     );
   }
@@ -72,8 +72,8 @@ const imgZeroPad = (mat, modelSize, outputSize) => {
   const preProcessed = cv.blobFromImage(
     mat,
     1 / 255.0,
-    { width: modelSize[0], height: modelSize[1] },
-    [0, 0, 0, 0],
+    new cv.Size(modelSize[0], modelSize[1]),
+    new cv.Scalar(0, 0, 0, 0),
     false,
     false,
   );
@@ -100,8 +100,8 @@ const imgDynamic = (mat, size) => {
   const preProcessed = cv.blobFromImage(
     mat,
     1 / 255.0,
-    { width: divWidth, height: divHeight },
-    [0, 0, 0, 0],
+    new cv.Size(divWidth, divHeight),
+    new cv.Scalar(0, 0, 0, 0),
     false,
     false,
   );

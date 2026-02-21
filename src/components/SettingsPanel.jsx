@@ -215,7 +215,7 @@ const SettingsPanel = memo(function SettingsPanel({
                   type="number"
                   min="1"
                   max={navigator.hardwareConcurrency}
-                  defaultValue={navigator.hardwareConcurrency}
+                  defaultValue={1}
                   disabled={activeFeature !== null}
                   onChange={handleThreadChange}
                   className={`${inputClass} pr-8`}

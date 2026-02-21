@@ -11,6 +11,7 @@ import { preProcessImage, Colors, applyNMS } from "./process-util";
 export async function inferencePipeline(imageData, session, config) {
   const matsToDelete = [];
   let inputTensor = null;
+  let outputs = null;
   let output0 = null;
   let output1 = null;
 
@@ -29,11 +30,16 @@ export async function inferencePipeline(imageData, session, config) {
     );
 
     const start = performance.now();
-    const outputs = await session.run({
+    outputs = await session.run({
       images: inputTensor,
     });
-    output0 = outputs.output0;
-    output1 = outputs.output1;
+
+    // Get outputs by name if output0/output1 are not explicitly defined
+    const outputNames = session.outputNames;
+    output0 = outputs[outputNames[0]];
+    if (outputNames.length > 1) {
+      output1 = outputs[outputNames[1]];
+    }
     const end = performance.now();
 
     // Post process
@@ -135,8 +141,13 @@ export async function inferencePipeline(imageData, session, config) {
       if (mat && !mat.isDeleted()) mat.delete();
     });
     if (inputTensor) inputTensor.dispose();
-    if (output0) output0.dispose();
-    if (output1) output1.dispose();
+    if (outputs) {
+      for (const key in outputs) {
+        if (outputs[key] && typeof outputs[key].dispose === "function") {
+          outputs[key].dispose();
+        }
+      }
+    }
   }
 }
 
@@ -522,6 +533,8 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
   const { protoMask, maskWeightsData, MASK_CHANNELS, MASK_HEIGHT, MASK_WIDTH } =
     masksData;
 
+  const matsToDelete = [];
+
   // protoMask: [1, 32*160*160] -> cv.Mat(32, 160*160)
   const protoMaskMat = cv.matFromArray(
     MASK_CHANNELS,
@@ -529,6 +542,7 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
     cv.CV_32F,
     protoMask,
   );
+  matsToDelete.push(protoMaskMat);
 
   try {
     // Weights x Proto_mask
@@ -551,24 +565,31 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
       cv.CV_32F,
       maskWeights,
     );
+    matsToDelete.push(maskWeightsMat);
 
     const weightsMulProtoMat = new cv.Mat();
+    matsToDelete.push(weightsMulProtoMat);
+    const emptyMat = new cv.Mat();
+    matsToDelete.push(emptyMat);
     cv.gemm(
       maskWeightsMat, // [N, 32]
       protoMaskMat, // [32, 160*160]
       1.0,
-      new cv.Mat(),
+      emptyMat,
       0.0,
       weightsMulProtoMat, // [N, 160*160]
       0,
     );
 
-    protoMaskMat.delete();
-    maskWeightsMat.delete();
-
     // Sigmoid
     const maskSigmoidMat = new cv.Mat();
-    const onesMat = cv.Mat.ones(weightsMulProtoMat.size(), cv.CV_32F);
+    matsToDelete.push(maskSigmoidMat);
+    const onesMat = cv.Mat.ones(
+      weightsMulProtoMat.rows,
+      weightsMulProtoMat.cols,
+      cv.CV_32F,
+    );
+    matsToDelete.push(onesMat);
 
     const tempMat2 = new cv.Mat(
       weightsMulProtoMat.rows,
@@ -576,15 +597,12 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
       cv.CV_32F,
       new cv.Scalar(-1),
     );
+    matsToDelete.push(tempMat2);
     cv.multiply(weightsMulProtoMat, tempMat2, maskSigmoidMat);
-    tempMat2.delete();
 
     cv.exp(maskSigmoidMat, maskSigmoidMat);
     cv.add(maskSigmoidMat, onesMat, maskSigmoidMat);
     cv.divide(onesMat, maskSigmoidMat, maskSigmoidMat);
-
-    onesMat.delete();
-    weightsMulProtoMat.delete();
 
     // Create mask overlay
     const overlayMat = new cv.Mat(
@@ -593,14 +611,21 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
       cv.CV_8UC4,
       new cv.Scalar(0, 0, 0, 0),
     );
+    matsToDelete.push(overlayMat);
 
     const maskResizedMat = new cv.Mat();
+    matsToDelete.push(maskResizedMat);
     const maskBinaryMat = new cv.Mat();
+    matsToDelete.push(maskBinaryMat);
     const maskBinaryU8Mat = new cv.Mat();
+    matsToDelete.push(maskBinaryU8Mat);
 
     for (let i = 0; i < NUM_FILTERED_RESULTS; i++) {
-      const mask = maskSigmoidMat.row(i).data32F;
+      const rowMat = maskSigmoidMat.row(i);
+      matsToDelete.push(rowMat);
+      const mask = rowMat.data32F;
       const maskMat = cv.matFromArray(MASK_HEIGHT, MASK_WIDTH, cv.CV_32F, mask);
+      matsToDelete.push(maskMat);
 
       const [x, y, w, h] = filteredResults[i].bbox;
 
@@ -617,6 +642,7 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
       if (maskW > 0 && maskH > 0) {
         // 2. Crop the small region from 160x160 mask
         const maskRoi = maskMat.roi(new cv.Rect(maskX, maskY, maskW, maskH));
+        matsToDelete.push(maskRoi);
 
         // 3. Resize only this small region to the target bbox size
         const targetX = Math.max(0, Math.floor(x));
@@ -658,39 +684,31 @@ function postProcessMask(filteredResults, masksData, overlaySize) {
             cv.CV_8UC4,
             colorScalar,
           );
+          matsToDelete.push(maskColoredMat);
 
           // Copy to overlay mat at the specific bbox location
-          maskColoredMat.copyTo(
-            overlayMat.roi(new cv.Rect(targetX, targetY, targetW, targetH)),
-            maskBinaryU8Mat,
+          const overlayRoi = overlayMat.roi(
+            new cv.Rect(targetX, targetY, targetW, targetH),
           );
-
-          maskColoredMat.delete();
+          matsToDelete.push(overlayRoi);
+          maskColoredMat.copyTo(overlayRoi, maskBinaryU8Mat);
         }
-        maskRoi.delete();
       }
-      maskMat.delete();
     }
-    maskResizedMat.delete();
-    maskBinaryMat.delete();
-    maskBinaryU8Mat.delete();
-    maskSigmoidMat.delete();
 
     const imgData = new ImageData(
-      new Uint8ClampedArray(
-        overlayMat.data.buffer,
-        overlayMat.data.byteOffset,
-        overlayMat.data.byteLength,
-      ),
+      new Uint8ClampedArray(overlayMat.data),
       overlaySize[0],
       overlaySize[1],
     );
-    overlayMat.delete();
 
     return imgData;
   } catch (error) {
     console.error("Error masks:", error);
-    protoMaskMat.delete();
     return null;
+  } finally {
+    matsToDelete.forEach((mat) => {
+      if (mat && !mat.isDeleted()) mat.delete();
+    });
   }
 }
